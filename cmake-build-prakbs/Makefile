@@ -123,6 +123,33 @@ PrakBS23/fast:
 	$(MAKE) -f CMakeFiles/PrakBS23.dir/build.make CMakeFiles/PrakBS23.dir/build
 .PHONY : PrakBS23/fast
 
+keyValStore/keyValStore.o: keyValStore/keyValStore.c.o
+
+.PHONY : keyValStore/keyValStore.o
+
+# target to build an object file
+keyValStore/keyValStore.c.o:
+	$(MAKE) -f CMakeFiles/PrakBS23.dir/build.make CMakeFiles/PrakBS23.dir/keyValStore/keyValStore.c.o
+.PHONY : keyValStore/keyValStore.c.o
+
+keyValStore/keyValStore.i: keyValStore/keyValStore.c.i
+
+.PHONY : keyValStore/keyValStore.i
+
+# target to preprocess a source file
+keyValStore/keyValStore.c.i:
+	$(MAKE) -f CMakeFiles/PrakBS23.dir/build.make CMakeFiles/PrakBS23.dir/keyValStore/keyValStore.c.i
+.PHONY : keyValStore/keyValStore.c.i
+
+keyValStore/keyValStore.s: keyValStore/keyValStore.c.s
+
+.PHONY : keyValStore/keyValStore.s
+
+# target to generate assembly for a file
+keyValStore/keyValStore.c.s:
+	$(MAKE) -f CMakeFiles/PrakBS23.dir/build.make CMakeFiles/PrakBS23.dir/keyValStore/keyValStore.c.s
+.PHONY : keyValStore/keyValStore.c.s
+
 main.o: main.c.o
 
 .PHONY : main.o
@@ -159,6 +186,9 @@ help:
 	@echo "... rebuild_cache"
 	@echo "... PrakBS23"
 	@echo "... edit_cache"
+	@echo "... keyValStore/keyValStore.o"
+	@echo "... keyValStore/keyValStore.i"
+	@echo "... keyValStore/keyValStore.s"
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
