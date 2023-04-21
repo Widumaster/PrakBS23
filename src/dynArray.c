@@ -8,6 +8,7 @@
 
 void initArray(Array *arr, size_t initSize){
     arr->array = malloc(initSize * sizeof(Message));
+    arr->array = arr;
     arr->used = 0;
     arr->size = initSize;
 }

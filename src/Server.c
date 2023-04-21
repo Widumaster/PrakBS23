@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <semaphore.h>
 
 #include "inputHandler.h"
 #include "dynArray.h"
@@ -17,22 +18,23 @@
 #define TRUE 1
 #define PORT 4711
 #define MAX_CLIENTS 5
-#define SEGSIZE sizeof(Message)
+#define ARRAY_INIT_SIZE 128
+#define SEGSIZE sizeof(Message) * ARRAY_INIT_SIZE + sizeof(size_t) * 2
 
 void Process(int cfd, struct sockaddr_in server, Array *messages){
-    char in[BUFSIZE]; // Daten vom Client an den Server
-    int bytes_read; // Anzahl der Bytes, die der Client geschickt hat
+    char in[BUFSIZE]; // Client Data
+    int bytes_read; // number read, -1 for errors or 0 for EOF.
 
-    // Lesen von Daten, die der Client schickt
+    // fill n with \000
     memset(in, 0, BUFSIZE);
+    // Lesen von Daten, die der Client schickt
     bytes_read = read(cfd, in, BUFSIZE);
 
     printf("Client Message: %s", in);
 
-    // Zurückschicken der Daten, solange der Client welche schickt (und kein Fehler passiert)
+    // Process data and send Answer back to client
     while (bytes_read > 0) {
-        printf("sending back the %d bytes I received...\n", bytes_read);
-        handleInput(&messages, in);
+        handleInput(messages, in);
 
         write(cfd, in, sizeof(in));
         memset(in, 0, BUFSIZE);
@@ -41,16 +43,36 @@ void Process(int cfd, struct sockaddr_in server, Array *messages){
     }
 }
 
+int createSHM(){
+    int id = shmget(IPC_PRIVATE, SEGSIZE, IPC_CREAT|0600);
+    if(id < 0){
+        fprintf(stderr,"Creating shm failed");
+        exit(1);
+    }
+    return id;
+}
+int fillSHM(int id, Array sharedArray){
+    Array *share_mem;
+    share_mem = (Array *)shmat(id, 0, 0);
+
+
+}
+
 void Server(){
-    Array messages;
-    initArray(&messages,128);
-
     int pid[MAX_CLIENTS];
-    int id, *shar_mem;
+    int id;//, *shar_mem;
+    printf("SEGSIZE: %i", SEGSIZE);
+    Array *share_mem;
 
-    id = shmget(IPC_PRIVATE, SEGSIZE, IPC_CREAT|0600);
-    shar_mem = (int *)shmat(id, 0, 0);
-    *shar_mem = 0;
+    id = createSHM();
+
+    share_mem = (Array *)shmat(id, 0, 0);
+    if (share_mem == (Array *)-1) {
+        fprintf(stderr,"shmat failed");
+        exit(1);
+    }
+
+    initArray(share_mem, ARRAY_INIT_SIZE);
 
     int rfd; // Rendevouz-Descriptor
     int cfd; // Verbindungs-Descriptor
@@ -58,9 +80,7 @@ void Server(){
     struct sockaddr_in client; // Socketadresse eines Clients
     socklen_t client_len; // Länge der Client-Daten
 
-
-    pid_t child_pid;
-
+    pid_t children_pid[MAX_CLIENTS];
 
     // Socket erstellen
     rfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -93,28 +113,42 @@ void Server(){
         exit(-1);
     }
 
+    int i = 0;
     while (TRUE) {
 
+
+        children_pid[i] = fork();
         // Verbindung eines Clients wird entgegengenommen
         cfd = accept(rfd, (struct sockaddr *) &client, &client_len);
+        if(children_pid[i] == -1){
+            printf("Kindprozess konnte nicht erzeugt werden!\n");
+            exit(1);
+        }
 
-        child_pid = fork();
+        if( i >= MAX_CLIENTS){
+            fprintf("stderr", "Max clients reached");
+            close(cfd);
+            continue;
+        }
 
-        if (child_pid < 0) {
+        if (children_pid[i] < 0) {
             perror("fork failed");
             exit(EXIT_FAILURE);
-        } else if (child_pid == 0) {
+        } else if (children_pid[i] == 0) {
             // Child process
+            i++;
             close(rfd);
-            Process(cfd, server, &messages);
+            Process(cfd, server, share_mem);
             exit(0);
         } else {
             // Parent process
-            Process(cfd, server, &messages);
+            i++;
+            Process(cfd, server, share_mem);
             //close(cfd);
         }
 
     }
+
 
     // Rendevouz Descriptor schließen
     close(rfd);

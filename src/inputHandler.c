@@ -25,11 +25,18 @@ void handleGET(Array *arr, char* key, char* res){
 }
 
 void handlePUT(Array *arr, char* key, char* value, char* res){
-    Message message = {
+    /*Message message = {
             .key = malloc(strlen(key) + 1),
             .value = malloc(strlen(value) + 1),
             .deleted = 0,
+    };*/
+
+    Message message = {
+            .key = "",
+            .value = "",
+            .deleted = 0,
     };
+
     strcpy(message.key, key);
     strcpy(message.value, value);
 

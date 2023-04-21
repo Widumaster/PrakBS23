@@ -6,15 +6,15 @@
 #define PRAKBS23_COMMON_H
 
 typedef struct{
-    char* key;
-    char* value;
-    int deleted;
+    volatile char key[20];
+    volatile char value[1000];
+    volatile u_int8_t deleted;
 } Message;
 
 typedef struct {
-    Message *array;
-    size_t used;
-    size_t size;
+    volatile Message *array;
+    volatile size_t used;
+    volatile size_t size;
 } Array;
 
 #endif //PRAKBS23_COMMON_H
