@@ -7,6 +7,6 @@
 
 #include "common.h"
 
-int handleInput(Array *arr, char* in);
+int handleInput(Message *arr, char* in);
 
 #endif //PRAKBS23_INPUTHANDLER_H

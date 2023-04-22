@@ -6,8 +6,8 @@
 #define PRAKBS23_KEYVALSTORE_H
 #include "common.h"
 
-int put(Array *arr, Message message);
-int get(Array *arr, char* key, char* res);
-int del(Array *arr, char* key);
+int put(Message *arr, Message message);
+int get(Message *arr, char* key, char* res);
+int del(Message *arr, char* key);
 
 #endif //PRAKBS23_KEYVALSTORE_H

@@ -5,16 +5,14 @@
 #ifndef PRAKBS23_COMMON_H
 #define PRAKBS23_COMMON_H
 
+#define BUFSIZE 2048
+#define ARRSIZE 1024
+
 typedef struct{
-    volatile char key[20];
-    volatile char value[1000];
-    volatile u_int8_t deleted;
+    char key[20];
+    char value[1000];
+    int deleted;
 } Message;
 
-typedef struct {
-    volatile Message *array;
-    volatile size_t used;
-    volatile size_t size;
-} Array;
 
 #endif //PRAKBS23_COMMON_H
