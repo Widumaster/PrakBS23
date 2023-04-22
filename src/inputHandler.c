@@ -28,6 +28,7 @@ void handlePUT(Message *arr, char* key, char* value, char* res){
             .value = "",
             .deleted = 0,
     };
+
     strcpy(message.key, key);
     strcpy(message.value, value);
 

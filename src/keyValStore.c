@@ -6,13 +6,14 @@
 
 int put(Message *arr, Message message){
     for(int i = 0; i < ARRSIZE; i++){
-        if(strcmp(arr[i].key, "") == 0){
-            arr[i] = message;
+        if(strcmp(arr[i].key, message.key) == 0){
+            strcpy(arr[i].value, message.value);
+            arr[i].deleted = 0;
             return 0;
         }
 
-        if(strcmp(arr[i].key, message.key) == 0){
-            strcpy(arr[i].value, message.value);
+        if(strcmp(arr[i].key, "") == 0){
+            arr[i] = message;
             arr[i].deleted = 0;
             return 0;
         }
@@ -24,7 +25,7 @@ int put(Message *arr, Message message){
 int get(Message *arr, char* key, char* res){
     for (int i = 0; i < ARRSIZE; i++) {
         if(strcmp(arr[i].key, key) == 0 && arr[i].deleted == 0){
-            strcpy(res, arr->value);
+            strcpy(res, arr[i].value);
             return 0;
         }
     }
@@ -40,3 +41,4 @@ int del(Message *arr, char* key){
     }
     return 1;
 }
+

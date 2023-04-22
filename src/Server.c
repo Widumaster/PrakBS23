@@ -63,8 +63,6 @@ void Server(){
         share_mem[i] = message;
     }
 
-    //initArray(share_mem, ARRAY_INIT_SIZE);
-
     int rfd; // Rendevouz-Descriptor
     int cfd; // Verbindungs-Descriptor
 
