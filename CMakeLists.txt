@@ -3,4 +3,4 @@ project(PrakBS23 C)
 
 set(CMAKE_C_STANDARD 99)
 
-add_executable(PrakBS23 main.c main.h keyValStore/keyValStore.c keyValStore/keyValStore.h)
+add_executable(PrakBS23 main.c main.h keyValStore/keyValStore.c keyValStore/keyValStore.h requests.h requests.c socket.c commandStruct.c commandStruct.h keyValueStore.c)
