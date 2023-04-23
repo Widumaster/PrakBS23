@@ -16,7 +16,7 @@ void handleGET(Message *arr, char* key, char* res){
     char value[VALSIZE] = "";
 
     if(get(arr, key, value) == 1){
-        strcpy(res, "KEY DOES NOT EXIST\n");
+        snprintf(res, BUFSIZE, "GET:%s:key_nonexistent\n", key);
     }else{
         snprintf(res, BUFSIZE, "GET:%s:%s\n", key, value);
     }
@@ -43,9 +43,9 @@ int handlePUT(Message *arr, char* key, char* value, char* res){
 
 void handleDEL(Message *arr, char* key, char* res){
     if(del(arr, key) == 1){
-        strcpy(res, "DEL FAILED");
+        snprintf(res, BUFSIZE, "GET:%s:key_nonexistent\n", key);
     } else{
-        snprintf(res, BUFSIZE, "DEL:%s\n", key);
+        snprintf(res, BUFSIZE, "DEL:%s:key_deleted\n", key);
     }
 }
 

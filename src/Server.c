@@ -13,11 +13,11 @@
 #include "inputHandler.h"
 
 #define TRUE 1
-#define PORT 4711
+#define PORT 5678
 #define MAX_CLIENTS 50
 #define SEGSIZE sizeof(Message) * ARRSIZE
 
-void Process(int cfd, struct sockaddr_in server, Message *messages){
+void clientProcess(int cfd, struct sockaddr_in server, Message *messages){
     char in[BUFSIZE]; // Client Data
     int bytes_read; // number read, -1 for errors or 0 for EOF.
 
@@ -130,12 +130,12 @@ void Server(){
             // Child process
             close(rfd);
             i++;
-            Process(cfd, server, share_mem);
+            clientProcess(cfd, server, share_mem);
             exit(0);
         } else {
             // Parent process
             i++;
-            Process(cfd, server, share_mem);
+            clientProcess(cfd, server, share_mem);
         }
         shmctl(id, IPC_RMID, NULL);
     }
