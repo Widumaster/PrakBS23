@@ -9,8 +9,8 @@
 #include "keyValStore.h"
 
 #define VALSIZE 2000
-#define KEYSIZE 44
-#define CMDSIZE 4
+#define KEYSIZE 43
+#define CMDSIZE 5
 
 void handleGET(Message *arr, char* key, char* res){
     char value[VALSIZE] = "";
@@ -22,7 +22,7 @@ void handleGET(Message *arr, char* key, char* res){
     }
 }
 
-void handlePUT(Message *arr, char* key, char* value, char* res){
+int handlePUT(Message *arr, char* key, char* value, char* res){
     Message message = {
             .key = "",
             .value = "",
@@ -49,11 +49,8 @@ void handleDEL(Message *arr, char* key, char* res){
     }
 }
 
-int handleInput(Message *arr, char* in){
+int parseInput(char cmd[CMDSIZE], char key[KEYSIZE], char value[VALSIZE], char* in){
     char tempString[BUFSIZE];
-    char cmd[CMDSIZE] = "";
-    char key[KEYSIZE] = "";
-    char value[VALSIZE] = "";
     char* token;
 
     memcpy(tempString, in, BUFSIZE);
@@ -63,7 +60,7 @@ int handleInput(Message *arr, char* in){
         strcpy(cmd, token);
     }
 
-    if(strcmp(cmd, "GET") != 0){
+    if(strcmp(cmd, "GET") != 0 && strcmp(cmd, "DEL") != 0){
         token = strtok(NULL, " ");
         if(token != NULL){
             strcpy(key, token);
@@ -81,6 +78,19 @@ int handleInput(Message *arr, char* in){
         }
     }
 
+}
+
+int handleInput(Message *arr, char* in){
+    char cmd[CMDSIZE] = "";
+    char key[KEYSIZE] = "";
+    char value[VALSIZE] = "";
+
+    parseInput(cmd, key, value, in);
+
+    if(strncmp(cmd, "QUIT", 4) == 0){
+        snprintf(in, BUFSIZE, "QUIT\n");
+        return 1;
+    }
 
     if(strcmp(cmd, "GET") == 0){
         handleGET(arr, key, in);
@@ -91,6 +101,7 @@ int handleInput(Message *arr, char* in){
     else if(strcmp(cmd, "DEL") == 0){
         handleDEL(arr, key, in);
     }
+    return 0;
 
    // strncpy(cmd, in, ptr);
 }

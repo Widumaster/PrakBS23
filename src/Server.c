@@ -30,10 +30,15 @@ void Process(int cfd, struct sockaddr_in server, Message *messages){
 
     // Process data and send Answer back to client
     while (bytes_read > 0) {
-        handleInput(messages, in);
+        int quit = handleInput(messages, in);
 
         write(cfd, in, sizeof(in));
         memset(in, 0, BUFSIZE);
+
+        if(quit == 1){
+            close(cfd);
+            return;
+        }
 
         bytes_read = read(cfd, in, BUFSIZE);
     }
@@ -131,7 +136,6 @@ void Server(){
             // Parent process
             i++;
             Process(cfd, server, share_mem);
-            //close(cfd);
         }
         shmctl(id, IPC_RMID, NULL);
     }
