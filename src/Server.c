@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/sem.h>
 
 #include "inputHandler.h"
 
@@ -17,9 +18,15 @@
 #define MAX_CLIENTS 50
 #define SEGSIZE sizeof(Message) * ARRSIZE
 
-void clientProcess(int cfd, struct sockaddr_in server, Message *messages){
+void clientProcess(int cfd, struct sockaddr_in server, Message *messages, int sem_id){
     char in[BUFSIZE]; // Client Data
     int bytes_read; // number read, -1 for errors or 0 for EOF.
+
+    struct sembuf enter, leave; // Structs für den Semaphor
+    enter.sem_num = leave.sem_num = 0;  // Semaphor 0 in der Gruppe
+    enter.sem_flg = leave.sem_flg = SEM_UNDO;
+    enter.sem_op = -1; // blockieren, DOWN-Operation
+    leave.sem_op = 1;   // freigeben, UP-Operation
 
     // fill n with \000
     memset(in, 0, BUFSIZE);
@@ -30,7 +37,9 @@ void clientProcess(int cfd, struct sockaddr_in server, Message *messages){
 
     // Process data and send Answer back to client
     while (bytes_read > 0) {
+        semop(sem_id, &enter, 1);
         int quit = handleInput(messages, in);
+        semop(sem_id, &leave, 1);
 
         write(cfd, in, sizeof(in));
         memset(in, 0, BUFSIZE);
@@ -46,13 +55,23 @@ void clientProcess(int cfd, struct sockaddr_in server, Message *messages){
 
 void Server(){
     int pid[MAX_CLIENTS];
-    int id;
+    int shm_id, sem_id;
+    unsigned short marker[1];
 
     Message *share_mem;
 
-    id = shmget(IPC_PRIVATE, SEGSIZE, IPC_CREAT|0600);
+    sem_id = semget (IPC_PRIVATE, 1, IPC_CREAT|0644);
+    if (sem_id == -1) {
+        perror ("Die Gruppe konnte nicht angelegt werden!");
+        exit(1);
+    }
 
-    share_mem = (Message *)shmat(id, 0, 0);
+    marker[0] = 1;
+    semctl(sem_id, 1, SETALL, marker);  // alle Semaphore auf 1
+
+    shm_id = shmget(IPC_PRIVATE, SEGSIZE, IPC_CREAT|0600);
+
+    share_mem = (Message *)shmat(shm_id, 0, 0);
     if (share_mem == (Message *)-1) {
         fprintf(stderr,"shmat failed");
         exit(1);
@@ -127,17 +146,20 @@ void Server(){
             perror("fork failed");
             exit(EXIT_FAILURE);
         } else if (children_pid[i] == 0) {
+            int count = 0;
+
             // Child process
             close(rfd);
             i++;
-            clientProcess(cfd, server, share_mem);
+            clientProcess(cfd, server, share_mem, sem_id);
             exit(0);
         } else {
             // Parent process
             i++;
-            clientProcess(cfd, server, share_mem);
+            clientProcess(cfd, server, share_mem, sem_id);
         }
-        shmctl(id, IPC_RMID, NULL);
+        shmctl(shm_id, IPC_RMID, NULL);
+        semctl(sem_id, 0, IPC_RMID);
     }
 
 
