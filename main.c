@@ -15,6 +15,7 @@
 #define PORT 5678
 #define NUM_OF_CHILDS 4
 #define SEGSIZE sizeof(KeyValue)
+#define MAX_SIZE 1024
 
 int checkKey(int key);
 
@@ -23,13 +24,13 @@ typedef struct {
     int valueStore[1000];
 } KeyValue;
 
-KeyValue kv;
+KeyValue *kv;
 int arrayCounter = 0;
 
 void put(int key, int value) {
-    if (arrayCounter < sizeof(kv.keyStore)) {
-        kv.keyStore[key] = key;
-        kv.valueStore[key] = value;
+    if (arrayCounter < sizeof(kv->keyStore)) {
+        kv->keyStore[key] = key;
+        kv->valueStore[key] = value;
         arrayCounter++;
     }
 }
@@ -50,9 +51,9 @@ int putFun(int cfd, int bytes_read, char *in, int *keyHolder, int *valueHolder) 
 }
 
 void get(int key) {
-    for (int i = 0; i < sizeof(kv.keyStore); i++) {
-        if (key == kv.keyStore) {
-            printf("%i \n", kv.valueStore[key + 1]);
+    for (int i = 0; i < sizeof(kv->keyStore); i++) {
+        if (key == kv->keyStore) {
+            printf("%i \n", kv->valueStore[key + 1]);
             break;
         }
     }
@@ -66,7 +67,7 @@ int getFun(int cfd, int bytes_read, char *in, int *keyHolder, int *valueHolder) 
     if (keyExists) {
         get(keyValue);
         char valueStr[BUFSIZE];
-        sprintf(valueStr, "%d", kv.valueStore[keyValue]);
+        sprintf(valueStr, "%d", kv->valueStore[keyValue]);
         printf(valueStr);
         write(cfd, "Value: ", strlen("Value: "));
         write(cfd, valueStr, strlen(valueStr));
@@ -78,8 +79,8 @@ int getFun(int cfd, int bytes_read, char *in, int *keyHolder, int *valueHolder) 
 }
 
 int checkKey(int key) {
-    for (int i = 0; i < sizeof(kv.keyStore); i++) {
-        if (key == kv.keyStore[i]) {
+    for (int i = 0; i < sizeof(kv->keyStore); i++) {
+        if (key == kv->keyStore[i]) {
             return 1;
         }
     }
@@ -87,12 +88,12 @@ int checkKey(int key) {
 }
 
 void del(int key) {
-    for (int i = 0; i < sizeof(kv.keyStore); i++) {
-        if (key == kv.keyStore[i]) {
-            kv.keyStore[i] = 0;
-            kv.valueStore[i] = 0;
+    for (int i = 0; i < sizeof(kv->keyStore); i++) {
+        if (key == kv->keyStore[i]) {
+            kv->keyStore[i] = 0;
+            kv->valueStore[i] = 0;
             arrayCounter--;
-            printf("Deleted Key %d with Value : %d\n", key, kv.valueStore[i]);
+            printf("Deleted Key %d with Value : %d\n", key, kv->valueStore[i]);
             break;
         }
     }
@@ -120,7 +121,8 @@ int main() {
     char in[BUFSIZE]; // Daten vom Client an den Server
     int bytes_read = 1; // Anzahl der Bytes, die der Client geschickt hat
 
-    int i, id, *shar_mem;   /*  id für das Shared Memory Segment        */
+    int i, id; //, *shar_mem;   /*  id für das Shared Memory Segment        */
+
     /*  mit *shar_mem kann der im Shared Memory */
     /*  gespeicherte Wert verändert werden      */
     int pid[NUM_OF_CHILDS]; /*  enthält die PIDs der Kindprozesse       */
@@ -128,8 +130,8 @@ int main() {
     /* Nun wird das Shared Memory Segment angefordert, an den Prozess   */
     /* angehängt, und der dort gespreicherte Wert auf 0 gesetzt         */
     id = shmget(IPC_PRIVATE, SEGSIZE, IPC_CREAT | 0600);
-    shar_mem = (int *) shmat(id, 0, 0);
-    *shar_mem = 0;
+    kv = (KeyValue *) shmat(id, 0, 0);
+    //*shar_mem = 0;
 
 
     // Socket erstellen
@@ -207,7 +209,7 @@ int main() {
                     if (keyExists) {
                         get(keyValue);
                         char valueStr[BUFSIZE];
-                        sprintf(valueStr, "%d", kv.valueStore[keyValue]);
+                        sprintf(valueStr, "%d", kv->valueStore[keyValue]);
                         printf(valueStr);
                         write(cfd, "Value: ", strlen("Value: "));
                         write(cfd, valueStr, strlen(valueStr));
@@ -233,7 +235,7 @@ int main() {
                     //QUIT
                 } else if (strncmp(in, "quit", 4) == 0) {
                     printf("Verbindung abgebrochen\n");
-                    shmdt(shar_mem);
+                    shmdt(kv);
                     shmctl(id, IPC_RMID, 0);
                     close(cfd);
                 } else {
