@@ -5,7 +5,7 @@
       <paths name="BSDocker (44309638-e8f0-4780-b516-dc6961058d0a)">
         <serverdata>
           <mappings>
-            <mapping deploy="/tmp/tmp.x9QoDEk2RD" local="$PROJECT_DIR$" />
+            <mapping deploy="/tmp/PrakBS23" local="$PROJECT_DIR$" />
           </mappings>
           <excludedPaths>
             <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug" />

@@ -37,12 +37,21 @@ void requestPUT(Server* server, CommandStruct commandStruct, int clientID){
         strcpy(server->store[count].myKey, commandStruct.commandKey);
         strcpy(server->store[count].myValue, commandStruct.commandText);
 
-        /*if(memcmp(server->store[count].myKey, server->Dictionary.keyList,strlen(server->store[count].myKey))==0)
-        {
-            int writtenByte = sprintf(getreturn, "Your Subscribed key changed\n");
-            write(server->Dictionary.clientIDList, getreturn, writtenByte);
-        }*/
 
+
+
+        //Muss noch in eine eigene Function gepackt werden um redundanz zu verhindern
+
+        int index = 0;
+
+        while(server->store[count].PubSubDictionary[index] != 0 && index < 99){
+
+            memset(getreturn, 0, 2054);
+            int writtenByte = sprintf(getreturn, "Your Subscribed key changed\r\n");
+            write(server->store[count].PubSubDictionary[index], getreturn, writtenByte);
+
+            index++;
+        }
     }else{
         int writtenByte = sprintf(getreturn, "Key locked\n");
         write(clientID, getreturn, writtenByte);
@@ -116,6 +125,12 @@ void requestEND(Server* server, CommandStruct commandStruct) {
 }
 
 void requestSUB(Server* server, CommandStruct commandStruct, int clientID) {
+
+
+    //Muss später noch hinzufügen oder ändern das ich nicht immer durch alle Values durch iterieren möchte
+    //beim disconnecten eines CLients, dewegen Dictionary vom KeyValue Store zu Client side wechseln
+    //Implementiere ich später wenn ich mehr Aufgaben fertig habe und beim aufräumen meines codes bin
+
     initCount();
     while (server->store[count].myKey[0] != 0) {
         if (memcmp(server->store[count].myKey, commandStruct.commandKey,strlen(commandStruct.commandKey)) == 0) {
