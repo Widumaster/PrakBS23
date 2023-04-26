@@ -5,14 +5,19 @@
 #ifndef PRAKBS23_THREADS_H
 #define PRAKBS23_THREADS_H
 
+#include "socket.h"
+#include "commandStruct.h"
 
+typedef struct pthreadInformation_{
 
+    Server* server;
+    CommandStruct commandStruct;
+    int clientID;
 
+}pthreadInformation;
 
-
-
-
-
-
+pthreadInformation createpthreadInformation(Server* server, CommandStruct commandStruct, int ClientID);
+void threadRequestSwitch(pthreadInformation* pthreadWrapp);
+pthreadInformation create_pthreadInformation();
 
 #endif //PRAKBS23_THREADS_H

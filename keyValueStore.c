@@ -2,7 +2,7 @@
 // Created by Widumaster on 07.04.2023.
 //
 #define BUFSIZE 1024 // Größe des Buffers
-
+#include <pthread.h>
 
 #include <unistd.h>
 #include <string.h>
@@ -10,13 +10,15 @@
 #include <sys/poll.h>
 #include "keyValueStore.h"
 #include "requests.h"
+#include "threads.h"
+#include <stdlib.h>
 //#include "commandStruct.h" ? why does it work without it ????
 
 
 void pollManager(Server* server)
 {
     const int socketDataListSize = server->ClientIDListSize;
-    struct pollfd* socketDataList[100];
+    struct pollfd socketDataList[100];
     int timeout = -1;
     unsigned char flag = 0;
 
@@ -65,7 +67,7 @@ void pollManager(Server* server)
                         {
                             requestAddClient(server);
                         }else{
-                            //thread
+
                             handleRequest(currentPollData->fd, server);
                         }
                         flag = 1;
@@ -112,35 +114,14 @@ int handleRequest(int clientID, Server* server) {
     printf("Ausgelesener Key: %s\n", commandStruct.commandKey);
     printf("Ausgelesener CommandText: %s\n", commandStruct.commandText);
 
-    int count = 0;
-    switch (commandStruct.commandType) {
-        case CommandPUT:
-            requestPUT(server, commandStruct, clientID);
-            break;
 
-        case CommandGET:
-            requestGET(server, commandStruct, clientID);
-            break;
+    pthreadInformation *pthreadExecute = malloc(sizeof( pthreadInformation));
+    *pthreadExecute = createpthreadInformation(server, commandStruct, clientID);
+    pthread_t threadID = 0;
 
-        case CommandDEL:
-            requestDEL(server, commandStruct);
-            break;
+    //pthreat Switch function
+    pthread_create(&threadID, 0, (void *(*)(void *))threadRequestSwitch, pthreadExecute);
 
-        case CommandBEG:
-            requestBEG(server, commandStruct, clientID);
-            break;
-
-        case CommandEND:
-            requestEND(server, commandStruct);
-            break;
-
-        case CommandSUB:
-            requestSUB(server, commandStruct, clientID);
-            break;
-
-        case CommandQUIT:
-            requestQUIT(server, clientID);
-    }
 
     //printf("sending back the %d bytes I received...\n", bytes_read);
     //input[bytes_read++ - 1] = '\r';

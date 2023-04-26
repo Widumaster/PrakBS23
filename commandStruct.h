@@ -24,7 +24,7 @@ typedef struct CommandStruct_{
     char* input;
     commandKey commandType;
     char* commandKey;
-    char* commandText
+    char* commandText;
 
 }CommandStruct;
 

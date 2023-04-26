@@ -26,16 +26,16 @@ void requestAddClient(Server* server){
     server->ClientIDListSize++;
 }
 
-void requestPUT(Server* server, CommandStruct commandStruct, int clientID){
+void requestPUT(pthreadInformation* pthreadExecute){
     initCount();
-    while (server->store[count].myKey[0] != 0 && memcmp(server->store[count].myKey, commandStruct.commandKey,strlen(commandStruct.commandKey)) != 0) {
+    while (pthreadExecute->server->store[count].myKey[0] != 0 && memcmp(pthreadExecute->server->store[count].myKey, pthreadExecute->commandStruct.commandKey,strlen(pthreadExecute->commandStruct.commandKey)) != 0) {
         count++;
         if (count >= 10) break;
     }
-    if(server->store[count].lockData.flag != 1 || server->store[count].lockData.clientID == clientID)
+    if(pthreadExecute->server->store[count].lockData.flag != 1 || pthreadExecute->server->store[count].lockData.clientID == pthreadExecute->clientID)
     {
-        strcpy(server->store[count].myKey, commandStruct.commandKey);
-        strcpy(server->store[count].myValue, commandStruct.commandText);
+        strcpy(pthreadExecute->server->store[count].myKey, pthreadExecute->commandStruct.commandKey);
+        strcpy(pthreadExecute->server->store[count].myValue, pthreadExecute->commandStruct.commandText);
 
 
 
@@ -44,32 +44,32 @@ void requestPUT(Server* server, CommandStruct commandStruct, int clientID){
 
         int index = 0;
 
-        while(server->store[count].PubSubDictionary[index] != 0 && index < 99){
+        while(pthreadExecute->server->store[count].PubSubDictionary[index] != 0 && index < 99){
 
             memset(getreturn, 0, 2054);
             int writtenByte = sprintf(getreturn, "Your Subscribed key changed\r\n");
-            write(server->store[count].PubSubDictionary[index], getreturn, writtenByte);
+            write(pthreadExecute->server->store[count].PubSubDictionary[index], getreturn, writtenByte);
 
             index++;
         }
     }else{
         int writtenByte = sprintf(getreturn, "Key locked\n");
-        write(clientID, getreturn, writtenByte);
+        write(pthreadExecute->clientID, getreturn, writtenByte);
     }
 }
 
-void requestGET(Server* server, CommandStruct commandStruct, int clientID){
+void requestGET(pthreadInformation* pthreadExecute){
     initCount();
-    while (server->store[count].myKey[0] != 0) {
-        if (memcmp(server->store[count].myKey, commandStruct.commandKey,strlen(commandStruct.commandKey)) == 0) {
-            if(server->store[count].lockData.flag != 1 || server->store[count].lockData.clientID == clientID)
+    while (pthreadExecute->server->store[count].myKey[0] != 0) {
+        if (memcmp(pthreadExecute->server->store[count].myKey, pthreadExecute->commandStruct.commandKey,strlen(pthreadExecute->commandStruct.commandKey)) == 0) {
+            if(pthreadExecute->server->store[count].lockData.flag != 1 || pthreadExecute->server->store[count].lockData.clientID == pthreadExecute->clientID)
             {
                 memset(getreturn, 0, 2054);
-                int writtenByte = sprintf(getreturn, "GET:%s:%s\n", server->store[count].myKey, server->store[count].myValue);
-                write(clientID, getreturn, writtenByte);
+                int writtenByte = sprintf(getreturn, "GET:%s:%s\n", pthreadExecute->server->store[count].myKey, pthreadExecute->server->store[count].myValue);
+                write(pthreadExecute->clientID, getreturn, writtenByte);
             }else{
                 int writtenByte = sprintf(getreturn, "Key locked\n");
-                write(clientID, getreturn, writtenByte);
+                write(pthreadExecute->clientID, getreturn, writtenByte);
             }
         }
         count++;
@@ -77,54 +77,54 @@ void requestGET(Server* server, CommandStruct commandStruct, int clientID){
     }
 }
 
-void requestDEL(Server* server, CommandStruct commandStruct){
+void requestDEL(pthreadInformation* pthreadExecute){
 
     initCount();
     unsigned char flag = 0;
     while (count < 8) {
-        if (memcmp(server->store[count].myKey, commandStruct.commandKey,
-                   strlen(commandStruct.commandKey)) == 0) {
-            memset(server->store[count].myKey, 0, BUFSIZE);
-            memset(server->store[count].myValue, 0, BUFSIZE);
+        if (memcmp(pthreadExecute->server->store[count].myKey, pthreadExecute->commandStruct.commandKey,
+                   strlen(pthreadExecute->commandStruct.commandKey)) == 0) {
+            memset(pthreadExecute->server->store[count].myKey, 0, BUFSIZE);
+            memset(pthreadExecute->server->store[count].myValue, 0, BUFSIZE);
             flag = 1;
         }
 
         if (flag) {
-            strcpy(server->store[count].myKey, server->store[count + 1].myKey);
-            strcpy(server->store[count].myValue, server->store[count + 1].myValue);
+            strcpy(pthreadExecute->server->store[count].myKey, pthreadExecute->server->store[count + 1].myKey);
+            strcpy(pthreadExecute->server->store[count].myValue, pthreadExecute->server->store[count + 1].myValue);
 
-            memset(server->store[count + 1].myKey, 0, BUFSIZE);
-            memset(server->store[count + 1].myValue, 0, BUFSIZE);
+            memset(pthreadExecute->server->store[count + 1].myKey, 0, BUFSIZE);
+            memset(pthreadExecute->server->store[count + 1].myValue, 0, BUFSIZE);
         }
         count++;
     }
 }
 
-void requestBEG(Server* server, CommandStruct commandStruct, int clientID) {
+void requestBEG(pthreadInformation* pthreadExecute) {
     initCount();
-    while (server->store[count].myKey[0] != 0) {
-        if (memcmp(server->store[count].myKey, commandStruct.commandKey,strlen(commandStruct.commandKey)) == 0) {
-            server->store[count].lockData.flag = 1;
-            server->store[count].lockData.clientID = clientID;
+    while (pthreadExecute->server->store[count].myKey[0] != 0) {
+        if (memcmp(pthreadExecute->server->store[count].myKey, pthreadExecute->commandStruct.commandKey,strlen(pthreadExecute->commandStruct.commandKey)) == 0) {
+            pthreadExecute->server->store[count].lockData.flag = 1;
+            pthreadExecute->server->store[count].lockData.clientID = pthreadExecute->clientID;
         }
         count++;
         if (count >= 10) break;
     }
 }
 
-void requestEND(Server* server, CommandStruct commandStruct) {
+void requestEND(pthreadInformation* pthreadExecute){
     initCount();
-    while (server->store[count].myKey[0] != 0) {
-        if (memcmp(server->store[count].myKey, commandStruct.commandKey,strlen(commandStruct.commandKey)) == 0) {
-            server->store[count].lockData.flag = 0;
-            server->store[count].lockData.clientID = 0;
+    while (pthreadExecute->server->store[count].myKey[0] != 0) {
+        if (memcmp(pthreadExecute->server->store[count].myKey, pthreadExecute->commandStruct.commandKey,strlen(pthreadExecute->commandStruct.commandKey)) == 0) {
+            pthreadExecute->server->store[count].lockData.flag = 0;
+            pthreadExecute->server->store[count].lockData.clientID = 0;
         }
         count++;
         if (count >= 10) break;
     }
 }
 
-void requestSUB(Server* server, CommandStruct commandStruct, int clientID) {
+void requestSUB(pthreadInformation* pthreadExecute) {
 
 
     //Muss später noch hinzufügen oder ändern das ich nicht immer durch alle Values durch iterieren möchte
@@ -132,15 +132,15 @@ void requestSUB(Server* server, CommandStruct commandStruct, int clientID) {
     //Implementiere ich später wenn ich mehr Aufgaben fertig habe und beim aufräumen meines codes bin
 
     initCount();
-    while (server->store[count].myKey[0] != 0) {
-        if (memcmp(server->store[count].myKey, commandStruct.commandKey,strlen(commandStruct.commandKey)) == 0) {
+    while (pthreadExecute->server->store[count].myKey[0] != 0) {
+        if (memcmp(pthreadExecute->server->store[count].myKey, pthreadExecute->commandStruct.commandKey,strlen(pthreadExecute->commandStruct.commandKey)) == 0) {
 
             int index = 0;
-            while (server->store[count].PubSubDictionary[index] != 0)
+            while (pthreadExecute->server->store[count].PubSubDictionary[index] != 0)
             {
                 index++;
             }
-            server->store[count].PubSubDictionary[index] = clientID;
+            pthreadExecute->server->store[count].PubSubDictionary[index] = pthreadExecute->clientID;
 
         }
         count++;
@@ -148,22 +148,22 @@ void requestSUB(Server* server, CommandStruct commandStruct, int clientID) {
     }
 }
 
-void requestQUIT(Server* server, int clientID)
+void requestQUIT(pthreadInformation* pthreadExecute)
 {
     unsigned char flag = 0;
-    for (int i = 0; i < server->ClientIDListSize; ++i) {
-        if(server->ClientIDList[i] == clientID){
-            server->ClientIDList[i] = 0;
-            server->ClientIDListSize--;
+    for (int i = 0; i < pthreadExecute->server->ClientIDListSize; ++i) {
+        if(pthreadExecute->server->ClientIDList[i] == pthreadExecute->clientID){
+            pthreadExecute->server->ClientIDList[i] = 0;
+            pthreadExecute->server->ClientIDListSize--;
             flag = 1;
         }
 
         if(flag)
         {
-            server->ClientIDList[i] = server->ClientIDList[i+1];
-            server->ClientIDList[i+1] = 0;
+            pthreadExecute->server->ClientIDList[i] = pthreadExecute->server->ClientIDList[i+1];
+            pthreadExecute->server->ClientIDList[i+1] = 0;
         }
     }
 
-    close(clientID);
+    close(pthreadExecute->clientID);
 }
