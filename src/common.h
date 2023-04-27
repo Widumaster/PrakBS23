@@ -11,7 +11,6 @@
 typedef struct{
     char key[20];
     char value[1000];
-    int deleted;
 } Message;
 
 

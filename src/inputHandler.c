@@ -26,8 +26,7 @@ void handleGET(Message *arr, char* key, char* res){
 int handlePUT(Message *arr, char* key, char* value, char* res){
     Message message = {
             .key = "",
-            .value = "",
-            .deleted = 0,
+            .value = ""
     };
 
     strcpy(message.key, key);

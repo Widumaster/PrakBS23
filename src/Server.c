@@ -98,8 +98,7 @@ void initArray(Message *sharedArray){
     for (int i = 0; i < ARRSIZE; ++i) {
         Message message = {
                 .key = "",
-                .value = "",
-                .deleted = 0
+                .value = ""
         };
         sharedArray[i] = message;
     }
