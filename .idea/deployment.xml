@@ -2,22 +2,15 @@
 <project version="4">
   <component name="PublishConfigData" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
-      <paths name="BSDocker (44309638-e8f0-4780-b516-dc6961058d0a)">
+      <paths name="Docker (0e3b105b-dc14-479d-8a5e-a3be39ae9397)">
         <serverdata>
           <mappings>
-            <mapping deploy="/tmp/tmp.x9QoDEk2RD" local="$PROJECT_DIR$" />
+            <mapping deploy="/tmp/PrakBS23" local="$PROJECT_DIR$" web="/" />
           </mappings>
           <excludedPaths>
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-docker" />
             <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug" />
-            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-prakbs" />
           </excludedPaths>
-        </serverdata>
-      </paths>
-      <paths name="Widu">
-        <serverdata>
-          <mappings>
-            <mapping local="$PROJECT_DIR$" web="/" />
-          </mappings>
         </serverdata>
       </paths>
     </serverData>

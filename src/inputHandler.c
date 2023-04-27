@@ -7,6 +7,7 @@
 
 #include "inputHandler.h"
 #include "keyValStore.h"
+#include "cmdEnum.h"
 
 #define VALSIZE 2000
 #define KEYSIZE 43
@@ -49,18 +50,24 @@ void handleDEL(Message *arr, char* key, char* res){
     }
 }
 
-int parseInput(char cmd[CMDSIZE], char key[KEYSIZE], char value[VALSIZE], char* in){
+enum CMD parseInput(char key[KEYSIZE], char value[VALSIZE], char* in){
     char tempString[BUFSIZE];
     char* token;
+    char cmdString[CMDSIZE] = "";
+    enum CMD cmdResult;
 
     memcpy(tempString, in, BUFSIZE);
 
     token = strtok(tempString, " ");
     if(token != NULL){
-        strcpy(cmd, token);
+        strcpy(cmdString, token);
     }
+    printf("CMD: %s\n", cmdString);
 
-    if(strcmp(cmd, "GET") != 0 && strcmp(cmd, "DEL") != 0){
+    cmdResult = getCmdValue(cmdString);
+    printf("CMD: %s\n", getCmdString(cmdResult));
+
+    if(cmdResult != GET && cmdResult != DEL){
         token = strtok(NULL, " ");
         if(token != NULL){
             strcpy(key, token);
@@ -77,31 +84,27 @@ int parseInput(char cmd[CMDSIZE], char key[KEYSIZE], char value[VALSIZE], char* 
             strcpy(key, token);
         }
     }
-
+    return cmdResult;
 }
 
 int handleInput(Message *arr, char* in){
-    char cmd[CMDSIZE] = "";
+    enum CMD cmd;
     char key[KEYSIZE] = "";
     char value[VALSIZE] = "";
 
-    parseInput(cmd, key, value, in);
+    cmd = parseInput(key, value, in);
+    printf("CMD: %s: %s: %s\n", getCmdString(cmd), key, value);
 
-    if(strncmp(cmd, "QUIT", 4) == 0){
-        snprintf(in, BUFSIZE, "QUIT\n");
-        return 1;
+    switch (cmd) {
+        case GET: handleGET(arr, key, in); break;
+        case PUT: handlePUT(arr, key, value, in); break;
+        case DEL: handleDEL(arr, key, in); break;
+        case QUIT:
+        case BEG:
+        case END: snprintf(in, BUFSIZE, "%s\n", getCmdString(cmd)); break;
+        default: cmd = ERR;
     }
-
-    if(strcmp(cmd, "GET") == 0){
-        handleGET(arr, key, in);
-    }
-    else if(strcmp(cmd, "PUT") == 0){
-        handlePUT(arr, key, value, in);
-    }
-    else if(strcmp(cmd, "DEL") == 0){
-        handleDEL(arr, key, in);
-    }
-    return 0;
+    return cmd;
 
    // strncpy(cmd, in, ptr);
 }

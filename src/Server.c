@@ -12,157 +12,175 @@
 #include <sys/sem.h>
 
 #include "inputHandler.h"
+#include "common.h"
+#include "Semaphore.h"
+#include "cmdEnum.h"
 
 #define TRUE 1
 #define PORT 5678
 #define MAX_CLIENTS 50
 #define SEGSIZE sizeof(Message) * ARRSIZE
 
-void clientProcess(int cfd, struct sockaddr_in server, Message *messages, int sem_id){
-    char in[BUFSIZE]; // Client Data
-    int bytes_read; // number read, -1 for errors or 0 for EOF.
+semaphore mutex;
+semaphore block;
+int *blocker = 0;
 
-    struct sembuf enter, leave; // Structs für den Semaphor
-    enter.sem_num = leave.sem_num = 0;  // Semaphor 0 in der Gruppe
-    enter.sem_flg = leave.sem_flg = SEM_UNDO;
-    enter.sem_op = -1; // blockieren, DOWN-Operation
-    leave.sem_op = 1;   // freigeben, UP-Operation
 
-    // fill n with \000
-    memset(in, 0, BUFSIZE);
-    // Lesen von Daten, die der Client schickt
-    bytes_read = read(cfd, in, BUFSIZE);
-
-    printf("Client Message: %s", in);
-
-    // Process data and send Answer back to client
-    while (bytes_read > 0) {
-        semop(sem_id, &enter, 1);
-        int quit = handleInput(messages, in);
-        semop(sem_id, &leave, 1);
-
-        write(cfd, in, sizeof(in));
-        memset(in, 0, BUFSIZE);
-
-        if(quit == 1){
-            close(cfd);
-            return;
-        }
-
-        bytes_read = read(cfd, in, BUFSIZE);
+void handleError(int bool, char *msg){
+    if(bool){
+        perror(msg);
+        exit(EXIT_FAILURE);
     }
 }
 
-void Server(){
-    int pid[MAX_CLIENTS];
-    int shm_id, sem_id;
-    unsigned short marker[1];
+void handleClient(int cfd, Message *messages){
+    char in[BUFSIZE]; // Client Data
+    int bytes_read; // number read, -1 for errors or 0 for EOF
 
-    Message *share_mem;
+    memset(in, 0, BUFSIZE);
+    bytes_read = read(cfd, in, BUFSIZE);
 
-    sem_id = semget (IPC_PRIVATE, 1, IPC_CREAT|0644);
-    if (sem_id == -1) {
-        perror ("Die Gruppe konnte nicht angelegt werden!");
-        exit(1);
+    int action = -1;
+
+    while(bytes_read > 0){
+        // wait until the client is blocker or no one is blocker
+        while(*blocker != 0 && *blocker != getpid()){
+            sleep(1);
+        }
+
+        down(mutex, 0);
+        action = handleInput(messages, in);
+        up(mutex, 0);
+        printf("action: %i\n", action);
+
+        write(cfd, in, sizeof(in));
+
+        switch (action) {
+            case QUIT: close(cfd); return;
+            case BEG:
+                down(block, 0);
+                *blocker = getpid();
+                up(block, 0);
+                break;
+            case END:
+                down(block, 0);
+                *blocker = 0;
+                up(block, 0);
+                break;
+            default: break;
+        }
+
+        memset(in, 0, BUFSIZE);
+        bytes_read = read(cfd, in, BUFSIZE);
     }
+    close(cfd);
+}
 
-    marker[0] = 1;
-    semctl(sem_id, 1, SETALL, marker);  // alle Semaphore auf 1
 
-    shm_id = shmget(IPC_PRIVATE, SEGSIZE, IPC_CREAT|0600);
 
-    share_mem = (Message *)shmat(shm_id, 0, 0);
-    if (share_mem == (Message *)-1) {
-        fprintf(stderr,"shmat failed");
-        exit(1);
-    }
+int createSharedArray(Message **sharedArray){
+    int sharedArrayID = shmget(IPC_PRIVATE, SEGSIZE, IPC_CREAT|0600);
+    handleError(sharedArrayID < 0, "shmget failed");
+    *sharedArray = (Message *)shmat(sharedArrayID, 0, 0);
+    handleError(*sharedArray == (Message *)-1, "shmat failed");
+    return sharedArrayID;
+}
 
+int createSharedBlocker(int **blocker){
+    int blockerID = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT|0600);
+    handleError(blockerID < 0, "shmget failed");
+    *blocker = (int *)shmat(blockerID, 0, 0);
+    handleError(*blocker == (int *)-1, "shmat failed");
+    return blockerID;
+}
+
+void initArray(Message *sharedArray){
     for (int i = 0; i < ARRSIZE; ++i) {
         Message message = {
                 .key = "",
                 .value = "",
-                .deleted = 0,
+                .deleted = 0
         };
-
-        share_mem[i] = message;
+        sharedArray[i] = message;
     }
+}
 
-    int rfd; // Rendevouz-Descriptor
-    int cfd; // Verbindungs-Descriptor
+void Server(){
+    //shared array
+    Message *sharedArray;
+    int sharedArrayID = createSharedArray(&sharedArray);
+    initArray(sharedArray);
 
-    struct sockaddr_in client; // Socketadresse eines Clients
-    socklen_t client_len; // Länge der Client-Daten
+    //mutex
+    mutex = semget(IPC_PRIVATE, 1, IPC_CREAT|0600);
+    handleError(mutex < 0, "semget failed");
+    semctl(mutex, 0, SETVAL, 1);
 
-    pid_t children_pid[MAX_CLIENTS];
+    //block
+    block = semget(IPC_PRIVATE, 2, IPC_CREAT|0600);
+    handleError(block < 0, "semget failed");
+    semctl(block, 0, SETVAL, 1);
+    semctl(block, 1, SETVAL, 0);
 
-    // Socket erstellen
+    //blocker
+    blocker = (int *)malloc(sizeof(int));
+    int blockerID = createSharedBlocker(&blocker);
+    *blocker = 0;
+
+    //socket
+    int rfd, cfd;
+    struct sockaddr_in server, client;
+    unsigned int len;
+
+    //create socket
     rfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (rfd < 0 ){
-        fprintf(stderr, "socket konnte nicht erstellt werden\n");
-        exit(-1);
-    }
-
+    handleError(rfd < 0, "socket failed");
 
     // Socket Optionen setzen für schnelles wiederholtes Binden der Adresse
     int option = 1;
-    setsockopt(rfd, SOL_SOCKET, SO_REUSEADDR, (const void *) &option, sizeof(int));
+    int t = setsockopt(rfd, SOL_SOCKET, SO_REUSEADDR, (const void *) &option, sizeof(int));
+    handleError(t < 0, "setsockopt failed");
 
-
-    // Socket binden
-    struct sockaddr_in server;
+    //define server address
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
     server.sin_port = htons(PORT);
-    int brt = bind(rfd, (struct sockaddr *) &server, sizeof(server));
-    if (brt < 0 ){
-        fprintf(stderr, "socket konnte nicht gebunden werden\n");
-        exit(-1);
-    }
 
-    // Socket lauschen lassen
-    int lrt = listen(rfd, MAX_CLIENTS);
-    if (lrt < 0 ){
-        fprintf(stderr, "socket konnte nicht listen gesetzt werden\n");
-        exit(-1);
-    }
+    //bind socket to address
+    t = bind(rfd, (struct sockaddr *)&server, sizeof(server));
+    handleError(t < 0, "bind failed");
 
-    int i = 0;
-    while (TRUE) {
-        children_pid[i] = fork();
-        // Verbindung eines Clients wird entgegengenommen
-        cfd = accept(rfd, (struct sockaddr *) &client, &client_len);
-        if(children_pid[i] == -1){
-            printf("Kindprozess konnte nicht erzeugt werden!\n");
-            exit(1);
-        }
+    //listen to socket
+    t = listen(rfd, MAX_CLIENTS);
+    handleError(t < 0, "listen failed");
 
-        if( i >= MAX_CLIENTS){
-            fprintf("stderr", "Max clients reached");
-            close(cfd);
-            continue;
-        }
+    while(TRUE) {
+        //create child process
+        int pid = fork();
+        handleError(pid < 0, "fork failed");
 
-        if (children_pid[i] < 0) {
-            perror("fork failed");
-            exit(EXIT_FAILURE);
-        } else if (children_pid[i] == 0) {
-            int count = 0;
+        //accept incoming connections
+        len = sizeof(client);
+        cfd = accept(rfd, (struct sockaddr *) &client, &len);
+        handleError(cfd < 0, "accept failed");
 
-            // Child process
-            close(rfd);
-            i++;
-            clientProcess(cfd, server, share_mem, sem_id);
-            exit(0);
+        if (pid == 0) {
+            //child process
+           // close(rfd);
+            handleClient(cfd, sharedArray);
+            exit(EXIT_SUCCESS);
         } else {
-            // Parent process
-            i++;
-            clientProcess(cfd, server, share_mem, sem_id);
+            //parent process
+            handleClient(cfd, sharedArray);
         }
-        shmctl(shm_id, IPC_RMID, NULL);
-        semctl(sem_id, 0, IPC_RMID);
+
+        //close socket
+        close(cfd);
+
+        //delete shared memory
+        t = shmctl(sharedArrayID, IPC_RMID, 0);
+        handleError(t < 0, "shmctl failed");
     }
 
-
-    // Rendevouz Descriptor schließen
     close(rfd);
 }
