@@ -25,22 +25,15 @@ typedef struct {
 
 KeyValue *kv;
 
-int arrayCounter = 0;
-
 void put(char key[BUFSIZE], char value[BUFSIZE]) {
     for (int i = 0; i < ARRAY_SIZE; ++i) {
         if(strcmp(kv[i].keyStore, key) == 0){
             strcpy(kv[i].valueStore, value);
-            printf("In der Put Key: %s", kv[i].keyStore);
-            printf("In der Put Value: %s", kv[i].valueStore);
             return;
         }
         if(strcmp(kv[i].keyStore, "") == 0){
             strcpy(kv[i].keyStore, key);
             strcpy(kv[i].valueStore, value);
-
-            printf("In der Put Key: %s \n", kv[i].keyStore);
-            printf("In der Put Value: %s \n", kv[i].valueStore);
             return;
         }
     }
@@ -51,8 +44,7 @@ void get(char key[BUFSIZE], char value[BUFSIZE]) {
     for (int i = 0; i < ARRAY_SIZE; i++) {
         if (strcmp(kv[i].keyStore, key) == 0) {
             strcpy(valueHolder, kv[i].valueStore);
-            printf("In der Get: GetValue VALUEHOLDER: %s \n", valueHolder);
-            strcmp(value, valueHolder);
+            strcpy(value, valueHolder);
             return;
         }
     }
@@ -68,13 +60,12 @@ int checkKey(char key[BUFSIZE]) {
     return 0;
 }
 
-void del(char key) {
+void del(char key[BUFSIZE]) {
     for (int i = 0; i < ARRAY_SIZE; i++) {
-        if (key == kv->keyStore[i]) {
-            kv->keyStore[i] = 0;
-            kv->valueStore[i] = 0;
-            arrayCounter--;
-            printf("Deleted Key %d with Value : %d\n", key, kv->valueStore[i]);
+        if (strcmp(key, kv[i].keyStore) == 0) {
+            strcpy(kv[i].keyStore,"");
+            strcpy(kv[i].valueStore, "");
+            printf("Deleted Key %s with Value : %s\n", key, kv[i].valueStore);
             break;
         }
     }
@@ -143,21 +134,19 @@ int main() {
 
     char keyHolder[BUFSIZE];
     char valueHolder[BUFSIZE];
+
     while (ENDLOSSCHLEIFE) {
         // Verbindung eines Clients wird entgegengenommen
         cfd = accept(rfd, (struct sockaddr *) &client, &client_len);
         int pidD = fork();
         if (pidD != 0) {
-            printf("After Forking \n");
             // Lesen von Daten, die der Client schickt
             memset(in,0,BUFSIZE);
             bytes_read = read(cfd, in, BUFSIZE);
-            printf("After Client Input \n");
 
             // Zurückschicken der Daten, solange der Client welche schickt (und kein Fehler passiert)
             while (bytes_read > 0) {
                 printf("sending back the %d bytes I received...\n", bytes_read);
-                printf("GETPid: %i \n", getpid());
                 memset(in,0,BUFSIZE);
                 bytes_read = read(cfd, in, BUFSIZE);
                 //PUT
@@ -186,21 +175,18 @@ int main() {
                     bytes_read = read(cfd, in, BUFSIZE);
                     strcpy(keyHolder, in);
                     int keyExists = checkKey(keyHolder);
-                    printf("In der GetMain: Keyholder: %s \n" , keyHolder);
-                    printf("KeyExists: %i \n", keyExists);
                     if (keyExists) {
                         printf("In KeyExists \n");
                         char value[BUFSIZE];
-                        get(keyHolder, &value); // get the value associated with keyHolder
+                        get(keyHolder, value); // get the value associated with keyHolder
                         if (value != NULL) {
-                            printf("Value: %s\n", &value); // print the value
+                            printf("Value: %s\n", value); // print the value
                         } else {
                             printf("Key not found\n");
                         }
-                        printf("ValueStr : %s",&value);
+                        printf("ValueStr : %s",value);
                         write(cfd, "Value: ", strlen("Value: "));
-                        write(cfd, &value, strlen(&value));
-                        write(cfd, "\n", strlen("\n"));
+                        write(cfd, value, strlen(value));
                     } else {
                         write(cfd, "Schluessel nicht vorhanden", strlen("Schluessel nicht vorhanden"));
                         write(cfd, "\n", strlen("\n"));
@@ -211,7 +197,8 @@ int main() {
                     //delFun(cfd, bytes_read, in, &keyHolder, &valueHolder);
                     write(cfd, "Key: ", strlen("Key: "));
                     bytes_read = read(cfd, in, BUFSIZE);
-                    int keyValue = atoi(in);
+                    char keyValue[BUFSIZE];
+                    strcpy(keyValue, in);
                     int keyExists = checkKey(keyValue);
                     if (keyExists) {
                         del(keyValue);
