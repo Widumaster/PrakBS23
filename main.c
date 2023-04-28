@@ -14,81 +14,62 @@
 #define ENDLOSSCHLEIFE 1
 #define PORT 5678
 #define NUM_OF_CHILDS 4
-#define SEGSIZE sizeof(KeyValue)
+#define ARRAY_SIZE 1024
+#define SEGSIZE sizeof(KeyValue) * ARRAY_SIZE
 #define MAX_SIZE 1024
 
-int checkKey(int key);
-
 typedef struct {
-    int keyStore[1000];
-    int valueStore[1000];
+    char keyStore[500];
+    char valueStore[500];
 } KeyValue;
 
 KeyValue *kv;
+
 int arrayCounter = 0;
 
-void put(int key, int value) {
-    if (arrayCounter < sizeof(kv->keyStore)) {
-        kv->keyStore[key] = key;
-        kv->valueStore[key] = value;
-        arrayCounter++;
-    }
-}
+void put(char key[BUFSIZE], char value[BUFSIZE]) {
+    for (int i = 0; i < ARRAY_SIZE; ++i) {
+        if(strcmp(kv[i].keyStore, key) == 0){
+            strcpy(kv[i].valueStore, value);
+            printf("In der Put Key: %s", kv[i].keyStore);
+            printf("In der Put Value: %s", kv[i].valueStore);
+            return;
+        }
+        if(strcmp(kv[i].keyStore, "") == 0){
+            strcpy(kv[i].keyStore, key);
+            strcpy(kv[i].valueStore, value);
 
-int putFun(int cfd, int bytes_read, char *in, int *keyHolder, int *valueHolder) {
-    write(cfd, "Key: ", strlen("Key: "));
-    bytes_read = read(cfd, in, BUFSIZE);
-    *keyHolder = atoi(in);
-
-    //Get Value
-    write(cfd, "Value: ", strlen("Value: "));
-    bytes_read = read(cfd, in, BUFSIZE);
-    *valueHolder = atoi(in);
-
-    printf("Put Key %i with Value : %i \n ", *keyHolder, *valueHolder);
-
-    put(*keyHolder, *valueHolder);
-}
-
-void get(int key) {
-    for (int i = 0; i < sizeof(kv->keyStore); i++) {
-        if (key == kv->keyStore) {
-            printf("%i \n", kv->valueStore[key + 1]);
-            break;
+            printf("In der Put Key: %s \n", kv[i].keyStore);
+            printf("In der Put Value: %s \n", kv[i].valueStore);
+            return;
         }
     }
 }
 
-int getFun(int cfd, int bytes_read, char *in, int *keyHolder, int *valueHolder) {
-    write(cfd, "Key: ", strlen("Key: "));
-    bytes_read = read(cfd, in, BUFSIZE);
-    int keyValue = atoi(in);
-    int keyExists = checkKey(keyValue);
-    if (keyExists) {
-        get(keyValue);
-        char valueStr[BUFSIZE];
-        sprintf(valueStr, "%d", kv->valueStore[keyValue]);
-        printf(valueStr);
-        write(cfd, "Value: ", strlen("Value: "));
-        write(cfd, valueStr, strlen(valueStr));
-        write(cfd, "\n", strlen("\n"));
-    } else {
-        write(cfd, "Schluessel nicht vorhanden", strlen("Schluessel nicht vorhanden"));
-        write(cfd, "\n", strlen("\n"));
+void get(char key[BUFSIZE], char value[BUFSIZE]) {
+    char valueHolder[BUFSIZE];
+    for (int i = 0; i < ARRAY_SIZE; i++) {
+        if (strcmp(kv[i].keyStore, key) == 0) {
+            strcpy(valueHolder, kv[i].valueStore);
+            printf("In der Get: GetValue VALUEHOLDER: %s \n", valueHolder);
+            strcmp(value, valueHolder);
+            return;
+        }
     }
+
 }
 
-int checkKey(int key) {
-    for (int i = 0; i < sizeof(kv->keyStore); i++) {
-        if (key == kv->keyStore[i]) {
+int checkKey(char key[BUFSIZE]) {
+    for (int i = 0; i < ARRAY_SIZE; i++) {
+        if (strcmp(key, kv[i].keyStore) == 0) {
             return 1;
         }
     }
     return 0;
 }
 
-void del(int key) {
-    for (int i = 0; i < sizeof(kv->keyStore); i++) {
+void del(char key) {
+    for (int i = 0; i < ARRAY_SIZE; i++) {
         if (key == kv->keyStore[i]) {
             kv->keyStore[i] = 0;
             kv->valueStore[i] = 0;
@@ -96,19 +77,6 @@ void del(int key) {
             printf("Deleted Key %d with Value : %d\n", key, kv->valueStore[i]);
             break;
         }
-    }
-}
-
-int delFun(int cfd, int bytes_read, char *in, int *keyHolder, int *valueHolder) {
-    write(cfd, "Key: ", strlen("Key: "));
-    bytes_read = read(cfd, in, BUFSIZE);
-    int keyValue = atoi(in);
-    int keyExists = checkKey(keyValue);
-    if (keyExists) {
-        del(keyValue);
-        write(cfd, "Schluessel geloescht\n", strlen("Schluessel geloescht\n"));
-    } else {
-        write(cfd, "Schluessel nicht vorhanden\n", strlen("Schluessel nicht vorhanden\n"));
     }
 }
 
@@ -133,6 +101,13 @@ int main() {
     kv = (KeyValue *) shmat(id, 0, 0);
     //*shar_mem = 0;
 
+    for(int j = 0 ; j < ARRAY_SIZE; j++){
+        KeyValue keyValue = {
+                .keyStore = "",
+                .valueStore = ""
+        };
+        kv[j] = keyValue;
+    }
 
     // Socket erstellen
     rfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -166,9 +141,8 @@ int main() {
         exit(-1);
     }
 
-    int keyHolder;
-    int valueHolder;
-
+    char keyHolder[BUFSIZE];
+    char valueHolder[BUFSIZE];
     while (ENDLOSSCHLEIFE) {
         // Verbindung eines Clients wird entgegengenommen
         cfd = accept(rfd, (struct sockaddr *) &client, &client_len);
@@ -176,6 +150,7 @@ int main() {
         if (pidD != 0) {
             printf("After Forking \n");
             // Lesen von Daten, die der Client schickt
+            memset(in,0,BUFSIZE);
             bytes_read = read(cfd, in, BUFSIZE);
             printf("After Client Input \n");
 
@@ -183,36 +158,48 @@ int main() {
             while (bytes_read > 0) {
                 printf("sending back the %d bytes I received...\n", bytes_read);
                 printf("GETPid: %i \n", getpid());
+                memset(in,0,BUFSIZE);
                 bytes_read = read(cfd, in, BUFSIZE);
                 //PUT
                 if (strncmp(in, "put", 3) == 0) {
                     //putFun(cfd, bytes_read, in, &keyHolder, &valueHolder);
-                    KeyValue *shar_mem = NULL;
                     write(cfd, "Key: ", strlen("Key: "));
+                    memset(in,0,BUFSIZE);
                     bytes_read = read(cfd, in, BUFSIZE);
-                    keyHolder = atoi(in);
+                    strcpy(keyHolder, in);
+                    printf("Key: %s \n", in);
 
                     //Get Value
                     write(cfd, "Value: ", strlen("Value: "));
+                    memset(in,0,BUFSIZE);
                     bytes_read = read(cfd, in, BUFSIZE);
-                    valueHolder = atoi(in);
-                    printf("Put Key %i with Value : %i \n ", keyHolder, valueHolder);
+                    strcpy(valueHolder, in);
+                    printf("Value: %s \n", in);
+                    printf("Put Key %s with Value : %s \n", (char *)keyHolder, (char *)valueHolder);
 
-                    put(keyHolder, valueHolder);
+                    put((char *)&keyHolder, (char *)&valueHolder);
                     //GET
                 } else if (strncmp(in, "get", 3) == 0) {
                     //getFun(cfd, bytes_read, in, &keyHolder, &valueHolder);
                     write(cfd, "Key: ", strlen("Key: "));
+                    memset(in,0,BUFSIZE);
                     bytes_read = read(cfd, in, BUFSIZE);
-                    int keyValue = atoi(in);
-                    int keyExists = checkKey(keyValue);
+                    strcpy(keyHolder, in);
+                    int keyExists = checkKey(keyHolder);
+                    printf("In der GetMain: Keyholder: %s \n" , keyHolder);
+                    printf("KeyExists: %i \n", keyExists);
                     if (keyExists) {
-                        get(keyValue);
-                        char valueStr[BUFSIZE];
-                        sprintf(valueStr, "%d", kv->valueStore[keyValue]);
-                        printf(valueStr);
+                        printf("In KeyExists \n");
+                        char value[BUFSIZE];
+                        get(keyHolder, &value); // get the value associated with keyHolder
+                        if (value != NULL) {
+                            printf("Value: %s\n", &value); // print the value
+                        } else {
+                            printf("Key not found\n");
+                        }
+                        printf("ValueStr : %s",&value);
                         write(cfd, "Value: ", strlen("Value: "));
-                        write(cfd, valueStr, strlen(valueStr));
+                        write(cfd, &value, strlen(&value));
                         write(cfd, "\n", strlen("\n"));
                     } else {
                         write(cfd, "Schluessel nicht vorhanden", strlen("Schluessel nicht vorhanden"));
@@ -250,3 +237,51 @@ int main() {
     // Rendevouz Descriptor schließen
     close(rfd);
 }
+
+/*int putFun(int cfd, int bytes_read, char *in, int *keyHolder, int *valueHolder) {
+    write(cfd, "Key: ", strlen("Key: "));
+    bytes_read = read(cfd, in, BUFSIZE);
+    *keyHolder = atoi(in);
+
+    //Get Value
+    write(cfd, "Value: ", strlen("Value: "));
+    bytes_read = read(cfd, in, BUFSIZE);
+    *valueHolder = atoi(in);
+
+    printf("Put Key %i with Value : %i \n ", *keyHolder, *valueHolder);
+
+    put(*keyHolder, *valueHolder);
+}*/
+/*int getFun(int cfd, int bytes_read, char *in, int *keyHolder, int *valueHolder) {
+    write(cfd, "Key: ", strlen("Key: "));
+    bytes_read = read(cfd, in, BUFSIZE);
+    int keyValue = atoi(in);
+    int keyExists = checkKey(keyValue);
+    if (keyExists) {
+        get(keyValue);
+        char valueStr[BUFSIZE];
+        sprintf(valueStr, "%d", kv->valueStore[keyValue]);
+        printf(valueStr);
+        write(cfd, "Value: ", strlen("Value: "));
+        write(cfd, valueStr, strlen(valueStr));
+        write(cfd, "\n", strlen("\n"));
+    } else {
+        write(cfd, "Schluessel nicht vorhanden", strlen("Schluessel nicht vorhanden"));
+        write(cfd, "\n", strlen("\n"));
+    }
+}*/
+/*
+
+int delFun(int cfd, int bytes_read, char *in, int *keyHolder, int *valueHolder) {
+    write(cfd, "Key: ", strlen("Key: "));
+    bytes_read = read(cfd, in, BUFSIZE);
+    int keyValue = atoi(in);
+    int keyExists = checkKey(keyValue);
+    if (keyExists) {
+        del(keyValue);
+        write(cfd, "Schluessel geloescht\n", strlen("Schluessel geloescht\n"));
+    } else {
+        write(cfd, "Schluessel nicht vorhanden\n", strlen("Schluessel nicht vorhanden\n"));
+    }
+}
+*/
