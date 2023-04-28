@@ -71,6 +71,57 @@ void del(char key[BUFSIZE]) {
     }
 }
 
+void putFun(int cfd, int bytes_read, char *in, int *keyHolder, int *valueHolder) {
+    write(cfd, "Key: ", strlen("Key: "));
+    memset(in,0,BUFSIZE);
+    bytes_read = read(cfd, in, BUFSIZE);
+    strcpy(keyHolder, in);
+    printf("Key: %s \n", in);
+
+    //Get Value
+    write(cfd, "Value: ", strlen("Value: "));
+    memset(in,0,BUFSIZE);
+    bytes_read = read(cfd, in, BUFSIZE);
+    strcpy(valueHolder, in);
+    printf("Value: %s \n", in);
+    printf("Put Key %s with Value : %s \n", (char *) keyHolder, (char *) valueHolder);
+
+    put((char *) keyHolder, (char *) valueHolder);
+}
+
+void getFun(int cfd, int bytes_read, char *in, int *keyHolder, int *valueHolder) {
+    write(cfd, "Key: ", strlen("Key: "));
+    memset(in,0,BUFSIZE);
+    bytes_read = read(cfd, in, BUFSIZE);
+    strcpy(keyHolder, in);
+    int keyExists = checkKey(keyHolder);
+    if (keyExists) {
+        printf("In KeyExists \n");
+        char value[BUFSIZE];
+        get(keyHolder, value);
+        printf("ValueStr : %s",value);
+        write(cfd, "Value: ", strlen("Value: "));
+        write(cfd, value, strlen(value));
+    } else {
+        write(cfd, "Schluessel nicht vorhanden", strlen("Schluessel nicht vorhanden"));
+        write(cfd, "\n", strlen("\n"));
+    }
+}
+
+void delFun(int cfd, int bytes_read, char *in, int *keyHolder, int *valueHolder) {
+    write(cfd, "Key: ", strlen("Key: "));
+    bytes_read = read(cfd, in, BUFSIZE);
+    char keyValue[BUFSIZE];
+    strcpy(keyValue, in);
+    int keyExists = checkKey(keyValue);
+    if (keyExists) {
+        del(keyValue);
+        write(cfd, "Schluessel geloescht\n", strlen("Schluessel geloescht\n"));
+    } else {
+        write(cfd, "Schluessel nicht vorhanden\n", strlen("Schluessel nicht vorhanden\n"));
+    }
+}
+
 int main() {
     int rfd; // Rendevouz-Descriptor/ File-Descriptor
     int cfd; // Verbindungs-Descriptor
@@ -152,60 +203,16 @@ int main() {
                 //PUT
                 if (strncmp(in, "put", 3) == 0) {
                     //putFun(cfd, bytes_read, in, &keyHolder, &valueHolder);
-                    write(cfd, "Key: ", strlen("Key: "));
-                    memset(in,0,BUFSIZE);
-                    bytes_read = read(cfd, in, BUFSIZE);
-                    strcpy(keyHolder, in);
-                    printf("Key: %s \n", in);
-
-                    //Get Value
-                    write(cfd, "Value: ", strlen("Value: "));
-                    memset(in,0,BUFSIZE);
-                    bytes_read = read(cfd, in, BUFSIZE);
-                    strcpy(valueHolder, in);
-                    printf("Value: %s \n", in);
-                    printf("Put Key %s with Value : %s \n", (char *)keyHolder, (char *)valueHolder);
-
-                    put((char *)&keyHolder, (char *)&valueHolder);
+                    putFun(cfd, bytes_read, in, &keyHolder, &valueHolder);
                     //GET
                 } else if (strncmp(in, "get", 3) == 0) {
                     //getFun(cfd, bytes_read, in, &keyHolder, &valueHolder);
-                    write(cfd, "Key: ", strlen("Key: "));
-                    memset(in,0,BUFSIZE);
-                    bytes_read = read(cfd, in, BUFSIZE);
-                    strcpy(keyHolder, in);
-                    int keyExists = checkKey(keyHolder);
-                    if (keyExists) {
-                        printf("In KeyExists \n");
-                        char value[BUFSIZE];
-                        get(keyHolder, value); // get the value associated with keyHolder
-                        if (value != NULL) {
-                            printf("Value: %s\n", value); // print the value
-                        } else {
-                            printf("Key not found\n");
-                        }
-                        printf("ValueStr : %s",value);
-                        write(cfd, "Value: ", strlen("Value: "));
-                        write(cfd, value, strlen(value));
-                    } else {
-                        write(cfd, "Schluessel nicht vorhanden", strlen("Schluessel nicht vorhanden"));
-                        write(cfd, "\n", strlen("\n"));
-                    }
+                    getFun(cfd, bytes_read, in, &keyHolder, &valueHolder);
                 }
                     //DEL
                 else if (strncmp(in, "del", 3) == 0) {
                     //delFun(cfd, bytes_read, in, &keyHolder, &valueHolder);
-                    write(cfd, "Key: ", strlen("Key: "));
-                    bytes_read = read(cfd, in, BUFSIZE);
-                    char keyValue[BUFSIZE];
-                    strcpy(keyValue, in);
-                    int keyExists = checkKey(keyValue);
-                    if (keyExists) {
-                        del(keyValue);
-                        write(cfd, "Schluessel geloescht\n", strlen("Schluessel geloescht\n"));
-                    } else {
-                        write(cfd, "Schluessel nicht vorhanden\n", strlen("Schluessel nicht vorhanden\n"));
-                    }
+                    delFun(cfd, bytes_read, in, &keyHolder, &valueHolder);
                     //QUIT
                 } else if (strncmp(in, "quit", 4) == 0) {
                     printf("Verbindung abgebrochen\n");
@@ -224,6 +231,7 @@ int main() {
     // Rendevouz Descriptor schließen
     close(rfd);
 }
+
 
 /*int putFun(int cfd, int bytes_read, char *in, int *keyHolder, int *valueHolder) {
     write(cfd, "Key: ", strlen("Key: "));
