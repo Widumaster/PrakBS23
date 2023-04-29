@@ -4,13 +4,17 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <sys/msg.h>
+#include <stdlib.h>
+//#include <unistd.h>
 
 #include "inputHandler.h"
 #include "keyValStore.h"
 #include "cmdEnum.h"
 
+
 #define VALSIZE 2000
-#define KEYSIZE 43
+//#define KEYSIZE 43
 #define CMDSIZE 5
 
 void handleGET(Message *arr, char* key, char* res){
@@ -23,7 +27,7 @@ void handleGET(Message *arr, char* key, char* res){
     }
 }
 
-int handlePUT(Message *arr, char* key, char* value, char* res){
+void handlePUT(Message *arr, char* key, char* value, char* res, int qid){
     Message message = {
             .key = "",
             .value = ""
@@ -36,9 +40,19 @@ int handlePUT(Message *arr, char* key, char* value, char* res){
         strcpy(res, "PUT FAILED: NO EMPTY SPACE");
     } else{
         snprintf(res, BUFSIZE, "PUT:%s:%s\n", key, value);
+        SubMessage subMessage = {
+                .mtype = 1,
+                .mtext = snprintf(res, BUFSIZE, "PUT:%s:%s\n", key, value),
+                .key = ""
+        };
+        strcpy(subMessage.key, key);
+        // send message to queue with msgsnd
+        if (msgsnd(qid, &message, sizeof(message), 0) == -1) {
+            perror("msgsnd");
+            exit(1);
+        }
+
     }
-
-
 }
 
 void handleDEL(Message *arr, char* key, char* res){
@@ -46,6 +60,19 @@ void handleDEL(Message *arr, char* key, char* res){
         snprintf(res, BUFSIZE, "GET:%s:key_nonexistent\n", key);
     } else{
         snprintf(res, BUFSIZE, "DEL:%s:key_deleted\n", key);
+    }
+}
+
+void handleSUB(Message *messageArr, SubscriberStore *subArr, char* key, char* res, int cfd){
+    // add subscriber to subscriber array
+    printf("cfd: %i\n", cfd);
+    if(putSubscriber(subArr, key, cfd) == 1){
+        strcpy(res, "SUB FAILED: ALREADY SUBBED OR NO EMPTY SPACE\n");
+    } else{
+        printf("%i subbed to %s\n", cfd, key);
+        char value[VALSIZE] = "";
+        get(messageArr, key, value);
+        snprintf(res, BUFSIZE, "SUB:%s:%s\n", key, value);
     }
 }
 
@@ -66,7 +93,7 @@ enum CMD parseInput(char key[KEYSIZE], char value[VALSIZE], char* in){
     cmdResult = getCmdValue(cmdString);
     printf("CMD: %s\n", getCmdString(cmdResult));
 
-    if(cmdResult != GET && cmdResult != DEL){
+    if(cmdResult != GET && cmdResult != DEL && cmdResult != SUB){
         token = strtok(NULL, " ");
         if(token != NULL){
             strcpy(key, token);
@@ -86,7 +113,7 @@ enum CMD parseInput(char key[KEYSIZE], char value[VALSIZE], char* in){
     return cmdResult;
 }
 
-int handleInput(Message *arr, char* in){
+int handleInput(Message *messageArr, SubscriberStore *subArr, char* in, int cfd, int qid){
     enum CMD cmd;
     char key[KEYSIZE] = "";
     char value[VALSIZE] = "";
@@ -95,12 +122,13 @@ int handleInput(Message *arr, char* in){
     printf("CMD: %s: %s: %s\n", getCmdString(cmd), key, value);
 
     switch (cmd) {
-        case GET: handleGET(arr, key, in); break;
-        case PUT: handlePUT(arr, key, value, in); break;
-        case DEL: handleDEL(arr, key, in); break;
+        case GET: handleGET(messageArr, key, in); break;
+        case PUT: handlePUT(messageArr, key, value, in, qid); break;
+        case DEL: handleDEL(messageArr, key, in); break;
         case QUIT:
         case BEG:
-        case END: snprintf(in, BUFSIZE, "%s\n", getCmdString(cmd)); break;
+        case END: /*snprintf(in, BUFSIZE, "%s\n", getCmdString(cmd)); */memset(in, 0, BUFSIZE) ;break;
+        case SUB: handleSUB(messageArr, subArr, key, in, cfd); break;
         default: cmd = ERR;
     }
     return cmd;

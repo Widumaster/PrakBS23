@@ -5,7 +5,7 @@
 #ifndef PRAKBS23_CMDENUM_H
 #define PRAKBS23_CMDENUM_H
 
-enum CMD{PUT, GET, DEL, QUIT, BEG, END, ERR};
+enum CMD{PUT, GET, DEL, QUIT, BEG, END, SUB, ERR};
 
 char* getCmdString(enum CMD cmd);
 enum CMD getCmdValue(char* cmd);

@@ -14,6 +14,7 @@ char* getCmdString(enum CMD cmd){
         case QUIT: return "QUIT";
         case BEG: return "BEG";
         case END: return "END";
+        case SUB: return "SUB";
         default: return "ERR";
     }
 }
@@ -36,6 +37,9 @@ enum CMD getCmdValue(char* cmd){
     }
     else if (strncmp(cmd, "END", 3) == 0) {
         return END;
+    }
+    else if(strncmp(cmd, "SUB", 3) == 0){
+        return SUB;
     }
     else {
         return ERR;

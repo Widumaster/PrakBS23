@@ -6,7 +6,8 @@
 #define PRAKBS23_INPUTHANDLER_H
 
 #include "common.h"
+#include "subStore.h"
 
-int handleInput(Message *arr, char* in);
+int handleInput(Message *messageArr, SubscriberStore *subArr, char* in, int cfd, int qid);
 
 #endif //PRAKBS23_INPUTHANDLER_H

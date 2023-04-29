@@ -10,11 +10,14 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/sem.h>
+#include <sys/msg.h>
 
 #include "inputHandler.h"
 #include "common.h"
 #include "Semaphore.h"
 #include "cmdEnum.h"
+#include "subStore.h"
+#include "subStore.h"
 
 #define TRUE 1
 #define PORT 5678
@@ -23,17 +26,61 @@
 
 semaphore mutex;
 semaphore block;
+semaphore subStoreMutex;
+
 int *blocker = 0;
 
 
-void handleError(int bool, char *msg){
-    if(bool){
+void handleError(int bool, char *msg) {
+    if (bool) {
         perror(msg);
         exit(EXIT_FAILURE);
     }
 }
 
-void handleClient(int cfd, Message *messages){
+void notify(SubscriberStore *subscriberStore, SubMessage subMessage) {
+    for (int i = 0; i < MAXKEYS; i++) {
+        if (strcmp(subscriberStore[i].key, subMessage.key) == 0) {
+            char msg[BUFSIZE] = "";
+            strcpy(msg, subMessage.mtext);
+            for (int j = 0; j < MAXSUBS; j++) {
+                if (subscriberStore[i].pids[j] == 0)
+                    return;
+                printf("Sending to %d: %s", subscriberStore[i].pids[j], msg);
+                write(subscriberStore[i].pids[j], msg, BUFSIZE);
+            }
+            return;
+        }
+    }
+
+}
+
+//handle queue
+void handleQueue(int qid, SubscriberStore *subscriberStore) {
+    SubMessage subMessage = {
+            .mtype = 1,
+            .mtext = "",
+            .key = ""
+    };
+
+    while (TRUE) {
+        if (msgrcv(qid, &subMessage, sizeof(SubMessage), 0, 0) == -1) {
+            perror("msgrcv");
+            exit(1);
+        }
+
+        printf("Received: %s\n", subMessage.key);
+
+        if(strcmp(subMessage.key, "") != 0){
+            down(subStoreMutex, 0);
+            notify(subscriberStore, subMessage);
+            up(subStoreMutex, 0);
+        }
+
+    }
+}
+
+void handleClient(int cfd, Message *messages, SubscriberStore *subscriberStore, int qid) {
     char in[BUFSIZE]; // Client Data
     int bytes_read; // number read, -1 for errors or 0 for EOF
 
@@ -42,21 +89,23 @@ void handleClient(int cfd, Message *messages){
 
     int action = -1;
 
-    while(bytes_read > 0){
+    while (bytes_read > 0) {
         // wait until the client is blocker or no one is blocker
-        while(*blocker != 0 && *blocker != getpid()){
+        while (*blocker != 0 && *blocker != getpid()) {
             sleep(1);
         }
 
         down(mutex, 0);
-        action = handleInput(messages, in);
+        action = handleInput(messages, subscriberStore, in, cfd, qid);
         up(mutex, 0);
         printf("action: %i\n", action);
 
         write(cfd, in, sizeof(in));
 
         switch (action) {
-            case QUIT: close(cfd); return;
+            case QUIT:
+                close(cfd);
+                return;
             case BEG:
                 down(block, 0);
                 *blocker = getpid();
@@ -67,7 +116,8 @@ void handleClient(int cfd, Message *messages){
                 *blocker = 0;
                 up(block, 0);
                 break;
-            default: break;
+            default:
+                break;
         }
 
         memset(in, 0, BUFSIZE);
@@ -77,24 +127,23 @@ void handleClient(int cfd, Message *messages){
 }
 
 
-
-int createSharedArray(Message **sharedArray){
-    int sharedArrayID = shmget(IPC_PRIVATE, SEGSIZE, IPC_CREAT|0600);
+int createSharedArray(Message **sharedArray) {
+    int sharedArrayID = shmget(IPC_PRIVATE, SEGSIZE, IPC_CREAT | 0600);
     handleError(sharedArrayID < 0, "shmget failed");
-    *sharedArray = (Message *)shmat(sharedArrayID, 0, 0);
-    handleError(*sharedArray == (Message *)-1, "shmat failed");
+    *sharedArray = (Message *) shmat(sharedArrayID, 0, 0);
+    handleError(*sharedArray == (Message *) -1, "shmat failed");
     return sharedArrayID;
 }
 
-int createSharedBlocker(int **blocker){
-    int blockerID = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT|0600);
+int createSharedBlocker(int **blocker) {
+    int blockerID = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | 0600);
     handleError(blockerID < 0, "shmget failed");
-    *blocker = (int *)shmat(blockerID, 0, 0);
-    handleError(*blocker == (int *)-1, "shmat failed");
+    *blocker = (int *) shmat(blockerID, 0, 0);
+    handleError(*blocker == (int *) -1, "shmat failed");
     return blockerID;
 }
 
-void initArray(Message *sharedArray){
+void initArray(Message *sharedArray) {
     for (int i = 0; i < ARRSIZE; ++i) {
         Message message = {
                 .key = "",
@@ -104,29 +153,58 @@ void initArray(Message *sharedArray){
     }
 }
 
-void Server(){
+int createSharedSubscriberStore(SubscriberStore **subscriberStore) {
+    int subscriberStoreID = shmget(IPC_PRIVATE, sizeof(SubscriberStore) * MAXSUBS, IPC_CREAT | 0600);
+    handleError(subscriberStoreID < 0, "shmget failed");
+    *subscriberStore = (SubscriberStore *) shmat(subscriberStoreID, 0, 0);
+    handleError(*subscriberStore == (SubscriberStore *) -1, "shmat failed");
+    return subscriberStoreID;
+}
+
+void initSubscriberStore(SubscriberStore *subscriberStore) {
+    for (int i = 0; i < ARRSIZE; i++) {
+        SubscriberStore tempSubStore = {
+                .key = "",
+                .pids = {0}
+        };
+        subscriberStore[i] = tempSubStore;
+    }
+}
+
+void Server() {
     //shared array
     Message *sharedArray;
     int sharedArrayID = createSharedArray(&sharedArray);
     initArray(sharedArray);
 
+    //shared subscriber array
+    SubscriberStore *subscriberStore;
+    int subscriberStoreID = createSharedSubscriberStore(&subscriberStore);
+    initSubscriberStore(subscriberStore);
+
     //mutex
-    mutex = semget(IPC_PRIVATE, 1, IPC_CREAT|0600);
+    mutex = semget(IPC_PRIVATE, 1, IPC_CREAT | 0600);
     handleError(mutex < 0, "semget failed");
     semctl(mutex, 0, SETVAL, 1);
 
     //block
-    block = semget(IPC_PRIVATE, 2, IPC_CREAT|0600);
+    block = semget(IPC_PRIVATE, 2, IPC_CREAT | 0600);
     handleError(block < 0, "semget failed");
     semctl(block, 0, SETVAL, 1);
     semctl(block, 1, SETVAL, 0);
 
     //blocker
-    blocker = (int *)malloc(sizeof(int));
+    blocker = (int *) malloc(sizeof(int));
     int blockerID = createSharedBlocker(&blocker);
     *blocker = 0;
 
-    //socket
+    //substore mutex
+    subStoreMutex = semget(IPC_PRIVATE, 1, IPC_CREAT | 0600);
+    handleError(subStoreMutex < 0, "semget failed");
+    semctl(subStoreMutex, 0, SETVAL, 1);
+
+
+    //sockets
     int rfd, cfd;
     struct sockaddr_in server, client;
     unsigned int len;
@@ -146,14 +224,27 @@ void Server(){
     server.sin_port = htons(PORT);
 
     //bind socket to address
-    t = bind(rfd, (struct sockaddr *)&server, sizeof(server));
+    t = bind(rfd, (struct sockaddr *) &server, sizeof(server));
     handleError(t < 0, "bind failed");
 
     //listen to socket
     t = listen(rfd, MAX_CLIENTS);
     handleError(t < 0, "listen failed");
 
-    while(TRUE) {
+    //message queue for subscribers
+    int msgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
+    handleError(msgQueue < 0, "msgget failed");
+
+    //handle queue
+    int qpid = fork();
+    handleError(qpid < 0, "fork failed");
+    if (qpid == 0) {
+        //child process
+        handleQueue(msgQueue, subscriberStore);
+        exit(EXIT_SUCCESS);
+    }
+
+    while (TRUE) {
         //create child process
         int pid = fork();
         handleError(pid < 0, "fork failed");
@@ -165,12 +256,11 @@ void Server(){
 
         if (pid == 0) {
             //child process
-           // close(rfd);
-            handleClient(cfd, sharedArray);
+            handleClient(cfd, sharedArray, subscriberStore, msgQueue);
             exit(EXIT_SUCCESS);
         } else {
             //parent process
-            handleClient(cfd, sharedArray);
+            handleClient(cfd, sharedArray, subscriberStore, msgQueue);
         }
 
         //close socket
@@ -179,7 +269,18 @@ void Server(){
         //delete shared memory
         t = shmctl(sharedArrayID, IPC_RMID, 0);
         handleError(t < 0, "shmctl failed");
+        t = shmctl(subscriberStoreID, IPC_RMID, 0);
+        handleError(t < 0, "shmctl failed");
+        t = shmctl(blockerID, IPC_RMID, 0);
+        handleError(t < 0, "shmctl failed");
+
+        //delete semaphores
+        t = semctl(mutex, 0, IPC_RMID, 0);
+        handleError(t < 0, "semctl failed");
+        t = semctl(block, 0, IPC_RMID, 0);
+        handleError(t < 0, "semctl failed");
     }
 
+    //close socket
     close(rfd);
 }
