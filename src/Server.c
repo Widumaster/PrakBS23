@@ -11,6 +11,7 @@
 #include <sys/shm.h>
 #include <sys/sem.h>
 #include <sys/msg.h>
+#include <signal.h>
 
 #include "inputHandler.h"
 #include "common.h"
@@ -171,6 +172,16 @@ void initSubscriberStore(SubscriberStore *subscriberStore) {
     }
 }
 
+void deleteSharedMemory(int memId){
+    int t = shmctl(memId, IPC_RMID, 0);
+    handleError(t < 0, "shmctl failed");
+}
+
+void deleteSemaphores(int semId){
+    int t = semctl(semId, 0, IPC_RMID, 0);
+    handleError(t < 0, "semctl failed");
+}
+
 void Server() {
     //shared array
     Message *sharedArray;
@@ -236,7 +247,8 @@ void Server() {
     handleError(msgQueue < 0, "msgget failed");
 
     //handle queue
-    int qpid = fork();
+    int qpid = 0;
+    qpid = fork();
     handleError(qpid < 0, "fork failed");
     if (qpid == 0) {
         //child process
@@ -249,36 +261,48 @@ void Server() {
         int pid = fork();
         handleError(pid < 0, "fork failed");
 
-        //accept incoming connections
-        len = sizeof(client);
-        cfd = accept(rfd, (struct sockaddr *) &client, &len);
-        handleError(cfd < 0, "accept failed");
-
+        int i = 0;
         if (pid == 0) {
-            //child process
-            handleClient(cfd, sharedArray, subscriberStore, msgQueue);
-            exit(EXIT_SUCCESS);
+            while(TRUE){
+                if(i < MAX_CLIENTS) {
+                    i++;
+                    pid = fork();
+                    handleError(pid < 0, "fork failed");
+
+                    if (pid == 0) {
+                        //accept incoming connections
+                        len = sizeof(client);
+                        cfd = accept(rfd, (struct sockaddr *) &client, &len);
+                        handleError(cfd < 0, "accept failed");
+
+                        //child process
+                        handleClient(cfd, sharedArray, subscriberStore, msgQueue);
+                        i--;
+                        close(cfd);
+                        kill(getpid(), SIGINT);
+                        //exit(EXIT_SUCCESS);
+                    }
+                } else {
+                    //todo
+                }
+            }
         } else {
             //parent process
-            handleClient(cfd, sharedArray, subscriberStore, msgQueue);
+            while(TRUE){
+
+            }
         }
 
         //close socket
         close(cfd);
 
         //delete shared memory
-        t = shmctl(sharedArrayID, IPC_RMID, 0);
-        handleError(t < 0, "shmctl failed");
-        t = shmctl(subscriberStoreID, IPC_RMID, 0);
-        handleError(t < 0, "shmctl failed");
-        t = shmctl(blockerID, IPC_RMID, 0);
-        handleError(t < 0, "shmctl failed");
+        deleteSharedMemory(sharedArrayID);
+        deleteSharedMemory(subscriberStoreID);
+        deleteSharedMemory(blockerID);
 
-        //delete semaphores
-        t = semctl(mutex, 0, IPC_RMID, 0);
-        handleError(t < 0, "semctl failed");
-        t = semctl(block, 0, IPC_RMID, 0);
-        handleError(t < 0, "semctl failed");
+        deleteSemaphores(mutex);
+        deleteSemaphores(block);
     }
 
     //close socket
