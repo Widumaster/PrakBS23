@@ -42,16 +42,19 @@ void handlePUT(Message *arr, char* key, char* value, char* res, int qid){
         snprintf(res, BUFSIZE, "PUT:%s:%s\n", key, value);
         SubMessage subMessage = {
                 .mtype = 1,
-                .mtext = snprintf(res, BUFSIZE, "PUT:%s:%s\n", key, value),
-                .key = ""
+                .value = "",
+                .key = "",
+                .cmd = PUT
         };
         strcpy(subMessage.key, key);
+        strcpy(subMessage.value, value);
+
         // send message to queue with msgsnd
-        if (msgsnd(qid, &message, sizeof(message), 0) == -1) {
+        int t = msgsnd(qid, &subMessage, sizeof(SubMessage), 0);
+        if ( t == -1) {
             perror("msgsnd");
             exit(1);
         }
-
     }
 }
 

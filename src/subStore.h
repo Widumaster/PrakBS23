@@ -20,8 +20,9 @@ typedef struct {
 
 typedef struct {
     long mtype;
-    char mtext[BUFSIZE];
-    char key[5];
+    char value[2000];
+    char key[KEYSIZE];
+    int cmd;
 } SubMessage;
 
 int putSubscriber(SubscriberStore *arr, char key[KEYSIZE], int pid);

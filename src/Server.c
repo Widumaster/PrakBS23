@@ -43,11 +43,12 @@ void notify(SubscriberStore *subscriberStore, SubMessage subMessage) {
     for (int i = 0; i < MAXKEYS; i++) {
         if (strcmp(subscriberStore[i].key, subMessage.key) == 0) {
             char msg[BUFSIZE] = "";
-            strcpy(msg, subMessage.mtext);
+            strcpy(msg, subMessage.value);
+            snprintf(msg, BUFSIZE, "%s:%s:%s\n", getCmdString(subMessage.cmd), subMessage.key, subMessage.value);
             for (int j = 0; j < MAXSUBS; j++) {
                 if (subscriberStore[i].pids[j] == 0)
                     return;
-                printf("Sending to %d: %s", subscriberStore[i].pids[j], msg);
+                printf("Sending to %d: %s\n", subscriberStore[i].pids[j], msg);
                 write(subscriberStore[i].pids[j], msg, BUFSIZE);
             }
             return;
@@ -60,8 +61,9 @@ void notify(SubscriberStore *subscriberStore, SubMessage subMessage) {
 void handleQueue(int qid, SubscriberStore *subscriberStore) {
     SubMessage subMessage = {
             .mtype = 1,
-            .mtext = "",
-            .key = ""
+            .value = "",
+            .key = "",
+            .cmd = -1
     };
 
     while (TRUE) {
@@ -283,7 +285,7 @@ void Server() {
                         //exit(EXIT_SUCCESS);
                     }
                 } else {
-                    //todo
+                    //kill(getpid(), SIGINT);
                 }
             }
         } else {
