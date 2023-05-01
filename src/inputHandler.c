@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <sys/msg.h>
 #include <stdlib.h>
-//#include <unistd.h>
+#include <unistd.h>
 
 #include "inputHandler.h"
 #include "keyValStore.h"
@@ -66,13 +66,12 @@ void handleDEL(Message *arr, char* key, char* res){
     }
 }
 
-void handleSUB(Message *messageArr, SubscriberStore *subArr, char* key, char* res, int cfd){
+void handleSUB(Message *messageArr, SubscriberStore *subArr, char* key, char* res, int clientQueue, int pid){
     // add subscriber to subscriber array
-    printf("cfd: %i\n", cfd);
-    if(putSubscriber(subArr, key, cfd) == 1){
+    if(putSubscriber(subArr, key, pid, clientQueue) == 1){
         strcpy(res, "SUB FAILED: ALREADY SUBBED OR NO EMPTY SPACE\n");
     } else{
-        printf("%i subbed to %s\n", cfd, key);
+        printf("%i subbed to %s\n", getpid(), key);
         char value[VALSIZE] = "";
         get(messageArr, key, value);
         snprintf(res, BUFSIZE, "SUB:%s:%s\n", key, value);
@@ -116,7 +115,7 @@ enum CMD parseInput(char key[KEYSIZE], char value[VALSIZE], char* in){
     return cmdResult;
 }
 
-int handleInput(Message *messageArr, SubscriberStore *subArr, char* in, int cfd, int qid){
+int handleInput(Message *messageArr, SubscriberStore *subArr, char* in, int qid, int clientQueue){
     enum CMD cmd;
     char key[KEYSIZE] = "";
     char value[VALSIZE] = "";
@@ -131,7 +130,7 @@ int handleInput(Message *messageArr, SubscriberStore *subArr, char* in, int cfd,
         case QUIT:
         case BEG:
         case END: /*snprintf(in, BUFSIZE, "%s\n", getCmdString(cmd)); */memset(in, 0, BUFSIZE) ;break;
-        case SUB: handleSUB(messageArr, subArr, key, in, cfd); break;
+        case SUB: handleSUB(messageArr, subArr, key, in, clientQueue, getpid()); break;
         default: cmd = ERR;
     }
     return cmd;

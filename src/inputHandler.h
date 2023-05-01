@@ -8,6 +8,6 @@
 #include "common.h"
 #include "subStore.h"
 
-int handleInput(Message *messageArr, SubscriberStore *subArr, char* in, int cfd, int qid);
+int handleInput(Message *messageArr, SubscriberStore *subArr, char* in, int qid, int clientQueue);
 
 #endif //PRAKBS23_INPUTHANDLER_H

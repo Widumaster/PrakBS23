@@ -12,6 +12,7 @@
 #include <sys/sem.h>
 #include <sys/msg.h>
 #include <signal.h>
+#include <sys/wait.h>
 
 #include "inputHandler.h"
 #include "common.h"
@@ -22,7 +23,7 @@
 
 #define TRUE 1
 #define PORT 5678
-#define MAX_CLIENTS 50
+#define MAX_CLIENTS 16
 #define SEGSIZE sizeof(Message) * ARRSIZE
 
 semaphore mutex;
@@ -31,6 +32,11 @@ semaphore subStoreMutex;
 
 int *blocker = 0;
 
+sig_atomic_t endProgram = 0;
+
+void signal_handler(int signum) {
+    endProgram = 1;
+}
 
 void handleError(int bool, char *msg) {
     if (bool) {
@@ -39,22 +45,27 @@ void handleError(int bool, char *msg) {
     }
 }
 
-void notify(SubscriberStore *subscriberStore, SubMessage subMessage) {
+void notify(SubscriberStore *subscriberStore, SubMessage subMessage){
     for (int i = 0; i < MAXKEYS; i++) {
-        if (strcmp(subscriberStore[i].key, subMessage.key) == 0) {
-            char msg[BUFSIZE] = "";
-            strcpy(msg, subMessage.value);
-            snprintf(msg, BUFSIZE, "%s:%s:%s\n", getCmdString(subMessage.cmd), subMessage.key, subMessage.value);
-            for (int j = 0; j < MAXSUBS; j++) {
-                if (subscriberStore[i].pids[j] == 0)
-                    return;
-                printf("Sending to %d: %s\n", subscriberStore[i].pids[j], msg);
-                write(subscriberStore[i].pids[j], msg, BUFSIZE);
-            }
+        if(strcmp(subscriberStore[i].key, "") == 0)
             return;
+
+        if (strcmp(subscriberStore[i].key, subMessage.key) == 0) {
+            PubMessage pubMessage = {
+                    .mtype = 1,
+                    .mtext = "",
+                    .keyIndex = i,
+            };
+
+            snprintf(pubMessage.mtext, BUFSIZE, "%s:%s:%s\n", getCmdString(subMessage.cmd), subMessage.key, subMessage.value);
+
+            for (int j = 0; j < MAXSUBS; j++) {
+                if (subscriberStore[i].subs[j].pid == 0)
+                    break;
+                msgsnd(subscriberStore[i].subs[j].clientQueue, &pubMessage, sizeof(PubMessage), 0);
+            }
         }
     }
-
 }
 
 //handle queue
@@ -66,7 +77,7 @@ void handleQueue(int qid, SubscriberStore *subscriberStore) {
             .cmd = -1
     };
 
-    while (TRUE) {
+    while (!endProgram) {
         if (msgrcv(qid, &subMessage, sizeof(SubMessage), 0, 0) == -1) {
             perror("msgrcv");
             exit(1);
@@ -83,23 +94,55 @@ void handleQueue(int qid, SubscriberStore *subscriberStore) {
     }
 }
 
-void handleClient(int cfd, Message *messages, SubscriberStore *subscriberStore, int qid) {
+void handleClient(int cfd, Message *messages, SubscriberStore *subscriberStore, int subQueue) {
+    //message queue for publisher
+    int clientQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
+    handleError(clientQueue < 0, "msgget failed");
+
+    //fork
+    pid_t pid = fork();
+    handleError(pid < 0, "Error forking");
+
+    // child process
+    if (pid == 0) {
+        while(!endProgram){
+            PubMessage pubMessage = {
+                    .mtype = 0,
+                    .mtext = "",
+                    .keyIndex = 0,
+            };
+
+            if (msgrcv(clientQueue, &pubMessage, sizeof(PubMessage), 0, 0) == -1) {
+                perror("msgrcv");
+                exit(1);
+            }
+
+            printf("Client Process %i recieved %s\n", getppid(), pubMessage.mtext);
+
+            down(subStoreMutex, 0);
+            int t = write(cfd, pubMessage.mtext, BUFSIZE);
+            if (t < BUFSIZE) {
+                printf("Warning: Not all bytes written to socket. Expected: %d, Actual: %ld\n", BUFSIZE, t);
+            }
+            up(subStoreMutex, 0);
+        }
+    }
     char in[BUFSIZE]; // Client Data
     int bytes_read; // number read, -1 for errors or 0 for EOF
-
+    printf("Client %d connected\n", cfd);
     memset(in, 0, BUFSIZE);
     bytes_read = read(cfd, in, BUFSIZE);
 
     int action = -1;
 
     while (bytes_read > 0) {
-        // wait until the client is blocker or no one is blocker
+        // wait until the client is blockerhandleQueue or no one is blocker
         while (*blocker != 0 && *blocker != getpid()) {
             sleep(1);
         }
 
         down(mutex, 0);
-        action = handleInput(messages, subscriberStore, in, cfd, qid);
+        action = handleInput(messages, subscriberStore, in, subQueue, clientQueue);
         up(mutex, 0);
         printf("action: %i\n", action);
 
@@ -168,7 +211,7 @@ void initSubscriberStore(SubscriberStore *subscriberStore) {
     for (int i = 0; i < ARRSIZE; i++) {
         SubscriberStore tempSubStore = {
                 .key = "",
-                .pids = {0}
+                .subs = {}
         };
         subscriberStore[i] = tempSubStore;
     }
@@ -185,6 +228,10 @@ void deleteSemaphores(int semId){
 }
 
 void Server() {
+    // TODO fix signal handling for exit
+    // signal(SIGINT, signal_handler);
+    // signal(SIGTERM, signal_handler);
+
     //shared array
     Message *sharedArray;
     int sharedArrayID = createSharedArray(&sharedArray);
@@ -245,8 +292,8 @@ void Server() {
     handleError(t < 0, "listen failed");
 
     //message queue for subscribers
-    int msgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
-    handleError(msgQueue < 0, "msgget failed");
+    int subQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
+    handleError(subQueue < 0, "msgget failed");
 
     //handle queue
     int qpid = 0;
@@ -254,18 +301,20 @@ void Server() {
     handleError(qpid < 0, "fork failed");
     if (qpid == 0) {
         //child process
-        handleQueue(msgQueue, subscriberStore);
+        printf("queue process %d created\n", getpid());
+        handleQueue(subQueue, subscriberStore);
         exit(EXIT_SUCCESS);
     }
 
-    while (TRUE) {
+    while (!endProgram) {
         //create child process
         int pid = fork();
         handleError(pid < 0, "fork failed");
 
-        int i = 0;
         if (pid == 0) {
-            while(TRUE){
+            //child process
+            int i = 0;
+            while(!endProgram){
                 if(i < MAX_CLIENTS) {
                     i++;
                     pid = fork();
@@ -278,25 +327,24 @@ void Server() {
                         handleError(cfd < 0, "accept failed");
 
                         //child process
-                        handleClient(cfd, sharedArray, subscriberStore, msgQueue);
+                        handleClient(cfd, sharedArray, subscriberStore, subQueue);
                         i--;
                         close(cfd);
                         kill(getpid(), SIGINT);
-                        //exit(EXIT_SUCCESS);
                     }
-                } else {
-                    //kill(getpid(), SIGINT);
                 }
             }
         } else {
             //parent process
-            while(TRUE){
+            while(!endProgram){
 
             }
+            kill(0, SIGTERM);
+            while (wait(NULL) > 0);
         }
 
         //close socket
-        close(cfd);
+        //close(clientQueue);
 
         //delete shared memory
         deleteSharedMemory(sharedArrayID);
