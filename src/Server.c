@@ -136,9 +136,7 @@ void handleClient(int cfd, Message *messages, SubscriberStore *subscriberStore, 
 
             down(subStoreMutex, 0);
             int t = write(cfd, pubMessage.mtext, BUFSIZE);
-            if (t < BUFSIZE) {
-                printf("Warning: Not all bytes written to socket. Expected: %d, Actual: %ld\n", BUFSIZE, t);
-            }
+            handleError(t < 0, "Error writing to socket");
             up(subStoreMutex, 0);
         }
     }
@@ -153,6 +151,7 @@ void handleClient(int cfd, Message *messages, SubscriberStore *subscriberStore, 
 
     while (bytes_read > 0) {
         // wait until the client is blockerhandleQueue or no one is blocker
+
         while (*blocker != 0 && *blocker != getpid()) {
             sleep(1);
         }
