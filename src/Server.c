@@ -19,11 +19,10 @@
 #include "Semaphore.h"
 #include "cmdEnum.h"
 #include "subStore.h"
-#include "subStore.h"
 
 #define TRUE 1
 #define PORT 5678
-#define MAX_CLIENTS 16
+#define MAX_CLIENTS 128
 #define SEGSIZE sizeof(Message) * ARRSIZE
 
 semaphore mutex;
@@ -316,16 +315,15 @@ void Server() {
             int i = 0;
             while(!endProgram){
                 if(i < MAX_CLIENTS) {
+                    //accept incoming connections
+                    len = sizeof(client);
+                    cfd = accept(rfd, (struct sockaddr *) &client, &len);
+                    handleError(cfd < 0, "accept failed");
                     i++;
                     pid = fork();
                     handleError(pid < 0, "fork failed");
 
                     if (pid == 0) {
-                        //accept incoming connections
-                        len = sizeof(client);
-                        cfd = accept(rfd, (struct sockaddr *) &client, &len);
-                        handleError(cfd < 0, "accept failed");
-
                         //child process
                         handleClient(cfd, sharedArray, subscriberStore, subQueue);
                         i--;

@@ -58,11 +58,26 @@ void handlePUT(Message *arr, char* key, char* value, char* res, int qid){
     }
 }
 
-void handleDEL(Message *arr, char* key, char* res){
+void handleDEL(Message *arr, char* key, char* res, int qid){
     if(del(arr, key) == 1){
         snprintf(res, BUFSIZE, "GET:%s:key_nonexistent\n", key);
     } else{
         snprintf(res, BUFSIZE, "DEL:%s:key_deleted\n", key);
+        SubMessage subMessage = {
+                .mtype = 1,
+                .value = "",
+                .key = "",
+                .cmd = DEL
+        };
+        strcpy(subMessage.key, key);
+        strcpy(subMessage.value, "key_deleted");
+
+        // send message to queue with msgsnd
+        int t = msgsnd(qid, &subMessage, sizeof(SubMessage), 0);
+        if ( t == -1) {
+            perror("msgsnd");
+            exit(1);
+        }
     }
 }
 
@@ -126,7 +141,7 @@ int handleInput(Message *messageArr, SubscriberStore *subArr, char* in, int qid,
     switch (cmd) {
         case GET: handleGET(messageArr, key, in); break;
         case PUT: handlePUT(messageArr, key, value, in, qid); break;
-        case DEL: handleDEL(messageArr, key, in); break;
+        case DEL: handleDEL(messageArr, key, in, qid); break;
         case QUIT:
         case BEG:
         case END: /*snprintf(in, BUFSIZE, "%s\n", getCmdString(cmd)); */memset(in, 0, BUFSIZE) ;break;
