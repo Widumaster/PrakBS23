@@ -37,6 +37,10 @@ void signal_handler(int signum) {
     endProgram = 1;
 }
 
+void sigchld_handler(int signum) {
+    while (waitpid(-1, NULL, WNOHANG) > 0);
+}
+
 void handleError(int bool, char *msg) {
     if (bool) {
         perror(msg);
@@ -79,7 +83,7 @@ void handleQueue(int qid, SubscriberStore *subscriberStore) {
     while (!endProgram) {
         if (msgrcv(qid, &subMessage, sizeof(SubMessage), 0, 0) == -1) {
             perror("msgrcv");
-            exit(1);
+            exit(EXIT_SUCCESS);
         }
 
         printf("Received: %s\n", subMessage.key);
@@ -126,6 +130,7 @@ void handleClient(int cfd, Message *messages, SubscriberStore *subscriberStore, 
             up(subStoreMutex, 0);
         }
     }
+
     char in[BUFSIZE]; // Client Data
     int bytes_read; // number read, -1 for errors or 0 for EOF
     printf("Client %d connected\n", cfd);
@@ -149,7 +154,10 @@ void handleClient(int cfd, Message *messages, SubscriberStore *subscriberStore, 
 
         switch (action) {
             case QUIT:
-                close(cfd);
+                printf("Client %d quit\n", getpid());
+                printf("Killing child process %d\n", pid);
+                kill(pid, SIGKILL); // kill the child process
+                msgctl(clientQueue, IPC_RMID, NULL);
                 return;
             case BEG:
                 down(block, 0);
@@ -169,6 +177,7 @@ void handleClient(int cfd, Message *messages, SubscriberStore *subscriberStore, 
         bytes_read = read(cfd, in, BUFSIZE);
     }
     close(cfd);
+    msgctl(clientQueue, IPC_RMID, NULL);
 }
 
 
@@ -227,9 +236,9 @@ void deleteSemaphores(int semId){
 }
 
 void Server() {
-    // TODO fix signal handling for exit
-    // signal(SIGINT, signal_handler);
-    // signal(SIGTERM, signal_handler);
+     signal(SIGTERM, signal_handler);
+     signal(SIGCHLD, sigchld_handler);
+
 
     //shared array
     Message *sharedArray;
@@ -328,15 +337,14 @@ void Server() {
                         handleClient(cfd, sharedArray, subscriberStore, subQueue);
                         i--;
                         close(cfd);
-                        kill(getpid(), SIGINT);
+                        printf("client process %d terminated\n", getpid());
+                        exit(EXIT_SUCCESS);
                     }
                 }
             }
         } else {
             //parent process
-            while(!endProgram){
-
-            }
+            while(!endProgram){}
             kill(0, SIGTERM);
             while (wait(NULL) > 0);
         }

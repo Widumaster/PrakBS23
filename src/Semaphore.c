@@ -15,7 +15,7 @@ void up (semaphore id, int elem) {
     sem_up.sem_num = elem;
     sem_up.sem_op = +1;
     sem_up.sem_flg = 0;
-    printf ("Semaphor up   %i %i: %i. %i\n", id, elem, semctl(id, elem, GETVAL), getpid());
+    //printf ("Semaphor up   %i %i: %i. %i\n", id, elem, semctl(id, elem, GETVAL), getpid());
     t = semop (id, &sem_up, 1);
     if (t < 0) {
         perror ("up");
@@ -29,7 +29,7 @@ void down (semaphore id, int elem) {
     sem_down.sem_num = elem;
     sem_down.sem_op = -1;
     sem_down.sem_flg = 0;
-    printf ("Semaphor down %i %i: %i. %i\n", id, elem, semctl(id, elem, GETVAL), getpid()); fflush(stdout);
+    //printf ("Semaphor down %i %i: %i. %i\n", id, elem, semctl(id, elem, GETVAL), getpid()); fflush(stdout);
     int t = semop (id, &sem_down, 1);
     if (t < 0) {
         perror ("down");
