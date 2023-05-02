@@ -339,6 +339,8 @@ void Server() {
                         close(cfd);
                         printf("client process %d terminated\n", getpid());
                         exit(EXIT_SUCCESS);
+                    }else{
+                        close(cfd);
                     }
                 }
             }
