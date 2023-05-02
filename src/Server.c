@@ -25,6 +25,10 @@
 #define MAX_CLIENTS 128
 #define SEGSIZE sizeof(Message) * ARRSIZE
 
+int sharedArrayID = -1;
+int subscriberStoreID = -1;
+int blockerID = -1;
+
 semaphore mutex;
 semaphore block;
 semaphore subStoreMutex;
@@ -35,6 +39,14 @@ sig_atomic_t endProgram = 0;
 
 void signal_handler(int signum) {
     endProgram = 1;
+
+    semctl(mutex, 0, IPC_RMID, 0);
+    semctl(block, 0, IPC_RMID, 0);
+    semctl(subStoreMutex, 0, IPC_RMID, 0);
+
+    shmctl(sharedArrayID, IPC_RMID, NULL);
+    shmctl(subscriberStoreID, IPC_RMID, NULL);
+    shmctl(blockerID, IPC_RMID, NULL);
 }
 
 void sigchld_handler(int signum) {
@@ -156,7 +168,7 @@ void handleClient(int cfd, Message *messages, SubscriberStore *subscriberStore, 
             case QUIT:
                 printf("Client %d quit\n", getpid());
                 printf("Killing child process %d\n", pid);
-                kill(pid, SIGKILL); // kill the child process
+                kill(pid, SIGTERM); // terminate the child process
                 msgctl(clientQueue, IPC_RMID, NULL);
                 return;
             case BEG:
@@ -182,7 +194,7 @@ void handleClient(int cfd, Message *messages, SubscriberStore *subscriberStore, 
 
 
 int createSharedArray(Message **sharedArray) {
-    int sharedArrayID = shmget(IPC_PRIVATE, SEGSIZE, IPC_CREAT | 0600);
+    sharedArrayID = shmget(IPC_PRIVATE, SEGSIZE, IPC_CREAT | 0600);
     handleError(sharedArrayID < 0, "shmget failed");
     *sharedArray = (Message *) shmat(sharedArrayID, 0, 0);
     handleError(*sharedArray == (Message *) -1, "shmat failed");
@@ -236,18 +248,16 @@ void deleteSemaphores(int semId){
 }
 
 void Server() {
-     signal(SIGTERM, signal_handler);
      signal(SIGCHLD, sigchld_handler);
-
 
     //shared array
     Message *sharedArray;
-    int sharedArrayID = createSharedArray(&sharedArray);
+    sharedArrayID = createSharedArray(&sharedArray);
     initArray(sharedArray);
 
     //shared subscriber array
     SubscriberStore *subscriberStore;
-    int subscriberStoreID = createSharedSubscriberStore(&subscriberStore);
+    subscriberStoreID = createSharedSubscriberStore(&subscriberStore);
     initSubscriberStore(subscriberStore);
 
     //mutex
@@ -345,6 +355,7 @@ void Server() {
                 }
             }
         } else {
+            signal(SIGTERM, signal_handler);
             //parent process
             while(!endProgram){}
             kill(0, SIGTERM);
@@ -353,15 +364,15 @@ void Server() {
 
         //close socket
         //close(clientQueue);
-
-        //delete shared memory
-        deleteSharedMemory(sharedArrayID);
-        deleteSharedMemory(subscriberStoreID);
-        deleteSharedMemory(blockerID);
-
-        deleteSemaphores(mutex);
-        deleteSemaphores(block);
     }
+
+    //delete shared memory
+    deleteSharedMemory(sharedArrayID);
+    deleteSharedMemory(subscriberStoreID);
+    deleteSharedMemory(blockerID);
+
+    deleteSemaphores(mutex);
+    deleteSemaphores(block);
 
     //close socket
     close(rfd);
