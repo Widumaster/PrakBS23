@@ -152,9 +152,18 @@ void handleClient(int cfd, Message *messages, SubscriberStore *subscriberStore, 
     while (bytes_read > 0) {
         // wait until the client is blockerhandleQueue or no one is blocker
 
+        int blockMessageSend = 0;
         while (*blocker != 0 && *blocker != getpid()) {
+            if (!blockMessageSend) {
+                char out[BUFSIZE];
+                memset(out, 0, BUFSIZE);
+                handleBlockedInput(messages, in, out);
+                write(cfd, out, sizeof(out));
+                blockMessageSend = 1;
+            }
             sleep(1);
         }
+        blockMessageSend = 0;
 
         down(mutex, 0);
         action = handleInput(messages, subscriberStore, in, subQueue, clientQueue);

@@ -152,3 +152,13 @@ int handleInput(Message *messageArr, SubscriberStore *subArr, char* in, int qid,
 
    // strncpy(cmd, in, ptr);
 }
+
+void handleBlockedInput( Message *messageArr, char* in, char* out){
+    enum CMD cmd;
+    char key[KEYSIZE] = "";
+    char value[VALSIZE] = "";
+
+    cmd = parseInput(key, value, in);
+
+    snprintf(out, BUFSIZE, "%s:%s:blockingClient\n", getCmdString(cmd), key);
+}
