@@ -20,4 +20,9 @@ pthreadInformation createpthreadInformation(Server* server, CommandStruct comman
 void threadRequestSwitch(pthreadInformation* pthreadWrapp);
 pthreadInformation create_pthreadInformation();
 
+void initializeSem(Server* server);
+void openSem(Server* server);
+void closeSem(Server* server);
+void clearSem(int sem_id);
+
 #endif //PRAKBS23_THREADS_H

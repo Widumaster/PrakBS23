@@ -23,6 +23,7 @@ typedef struct Server_
     int ClientIDList[100];
     int ClientIDListSize;
     DataEntry store[10];
+    int SemaphoreID;
 }Server;
 
 typedef struct SocketOptions_{

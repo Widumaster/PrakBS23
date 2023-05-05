@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <netinet/in.h>
+#include "threads.h"
 
 Server GetSocket(){
 
@@ -19,6 +20,7 @@ Server GetSocket(){
     bindSocket(&server);
     socketListen(&server);
 
+    initializeSem(&server);
     initServer(&server);
     return server;
 }

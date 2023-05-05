@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/socket.h>
+#include "threads.h"
 
 
 #define BUFSIZE 1024
@@ -34,16 +35,16 @@ void requestPUT(pthreadInformation* pthreadExecute){
     }
     if(pthreadExecute->server->store[count].lockData.flag != 1 || pthreadExecute->server->store[count].lockData.clientID == pthreadExecute->clientID)
     {
+
+        openSem(pthreadExecute->server);
         strcpy(pthreadExecute->server->store[count].myKey, pthreadExecute->commandStruct.commandKey);
         strcpy(pthreadExecute->server->store[count].myValue, pthreadExecute->commandStruct.commandText);
-
-
-
+        closeSem(pthreadExecute->server);
 
         //Muss noch in eine eigene Function gepackt werden um redundanz zu verhindern
-
         int index = 0;
 
+        //PUB SUB Schleife
         while(pthreadExecute->server->store[count].PubSubDictionary[index] != 0 && index < 99){
 
             memset(getreturn, 0, 2054);
@@ -65,7 +66,11 @@ void requestGET(pthreadInformation* pthreadExecute){
             if(pthreadExecute->server->store[count].lockData.flag != 1 || pthreadExecute->server->store[count].lockData.clientID == pthreadExecute->clientID)
             {
                 memset(getreturn, 0, 2054);
+
+                openSem(pthreadExecute->server);
                 int writtenByte = sprintf(getreturn, "GET:%s:%s\n", pthreadExecute->server->store[count].myKey, pthreadExecute->server->store[count].myValue);
+                closeSem(pthreadExecute->server);
+
                 write(pthreadExecute->clientID, getreturn, writtenByte);
             }else{
                 int writtenByte = sprintf(getreturn, "Key locked\n");
@@ -81,6 +86,7 @@ void requestDEL(pthreadInformation* pthreadExecute){
 
     initCount();
     unsigned char flag = 0;
+    openSem(pthreadExecute->server);
     while (count < 8) {
         if (memcmp(pthreadExecute->server->store[count].myKey, pthreadExecute->commandStruct.commandKey,
                    strlen(pthreadExecute->commandStruct.commandKey)) == 0) {
@@ -98,6 +104,7 @@ void requestDEL(pthreadInformation* pthreadExecute){
         }
         count++;
     }
+    closeSem(pthreadExecute->server);
 }
 
 void requestBEG(pthreadInformation* pthreadExecute) {

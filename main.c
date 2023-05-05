@@ -2,11 +2,9 @@
 #include "socket.h"
 #include "keyValueStore.h"
 
-
 int main() {
 
     Server server = GetSocket();
-
 
     while (1) {
 
